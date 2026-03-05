@@ -1,12 +1,15 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
+    QMessageBox, QMenu,
 )
 
 from mcubin.database import Session
 from mcubin.models import Part
 from mcubin.ui.parts_table import PartsModel, make_parts_table
 from mcubin.ui.add_part_screen import AddPartScreen
+from mcubin.ui.edit_part_dialog import EditPartDialog
 
 NAV = [
     ("parts",     "Parts"),
@@ -89,6 +92,9 @@ class MainWindow(QMainWindow):
         self.model = PartsModel()
         self.table = make_parts_table()
         self.table.setModel(self.model)
+        self.table.doubleClicked.connect(self._on_row_double_clicked)
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_context_menu)
         layout.addWidget(self.table)
 
         return page
@@ -131,6 +137,75 @@ class MainWindow(QMainWindow):
         if saved:
             self._load_parts(self.search_input.text())
             self.status.showMessage("Part added", 3000)
+
+    # ── Edit / Delete ─────────────────────────────────────────────────────
+
+    def _selected_parts(self):
+        rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        return [self.model.part_at(r) for r in rows]
+
+    def _selected_part(self):
+        parts = self._selected_parts()
+        return parts[0] if len(parts) == 1 else None
+
+    def _on_row_double_clicked(self, index):
+        part = self.model.part_at(index.row())
+        self._edit_part(part)
+
+    def _on_context_menu(self, pos):
+        parts = self._selected_parts()
+        if not parts:
+            return
+        menu = QMenu(self)
+        if len(parts) == 1:
+            menu.addAction("Edit", lambda: self._edit_part(parts[0]))
+            menu.addSeparator()
+        menu.addAction(
+            f"Delete {len(parts)} part{'s' if len(parts) > 1 else ''}",
+            lambda: self._delete_parts(parts),
+        )
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            parts = self._selected_parts()
+            if parts and self.stack.currentWidget() == self._pages["parts"]:
+                self._delete_parts(parts)
+        super().keyPressEvent(event)
+
+    def _edit_part(self, part: Part):
+        dlg = EditPartDialog(part, parent=self)
+        if dlg.exec():
+            with Session() as session:
+                db_part = session.get(Part, part.id)
+                for key, value in dlg.get_data().items():
+                    setattr(db_part, key, value)
+                session.commit()
+            self._load_parts(self.search_input.text())
+            self.status.showMessage("Part updated", 3000)
+
+    def _delete_parts(self, parts: list):
+        count = len(parts)
+        if count == 1:
+            label = parts[0].mpn or parts[0].supplier_pn or f"Part #{parts[0].id}"
+            msg = f"Delete {label}?"
+        else:
+            msg = f"Delete {count} parts?"
+        reply = QMessageBox.question(
+            self, "Delete",
+            msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            ids = [p.id for p in parts]
+            with Session() as session:
+                session.query(Part).filter(Part.id.in_(ids)).delete()
+                session.commit()
+            self._load_parts(self.search_input.text())
+            self.status.showMessage(
+                f"Deleted {count} part{'s' if count > 1 else ''}", 3000
+            )
 
     # ── Data ──────────────────────────────────────────────────────────────
 

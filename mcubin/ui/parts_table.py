@@ -1,8 +1,8 @@
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtWidgets import QTableView, QHeaderView
 
-COLUMNS = ["MPN", "Manufacturer", "Description", "Qty", "Location", "Category"]
-FIELDS  = ["mpn", "manufacturer", "description", "quantity", "location", "category"]
+COLUMNS = ["MPN", "Supplier PN", "Manufacturer", "Description", "Qty", "Location", "Category"]
+FIELDS  = ["mpn", "supplier_pn", "manufacturer", "description", "quantity", "location", "category"]
 
 
 class PartsModel(QAbstractTableModel):
@@ -45,12 +45,13 @@ def make_parts_table() -> QTableView:
     view = QTableView()
     view.setAlternatingRowColors(True)
     view.setSelectionBehavior(QTableView.SelectRows)
-    view.setSelectionMode(QTableView.SingleSelection)
+    view.setSelectionMode(QTableView.ExtendedSelection)
     view.setShowGrid(False)
     view.verticalHeader().setVisible(False)
     view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     view.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-    view.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+    view.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+    view.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Qty
     view.setEditTriggers(QTableView.NoEditTriggers)
     view.setWordWrap(False)
     view.verticalHeader().setDefaultSectionSize(36)
