@@ -1,8 +1,8 @@
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtWidgets import QTableView, QHeaderView
 
-COLUMNS = ["MPN", "Supplier PN", "Manufacturer", "Description", "Qty", "Location", "Category"]
-FIELDS  = ["mpn", "supplier_pn", "manufacturer", "description", "quantity", "location", "category"]
+COLUMNS = ["MPN", "Supplier PN", "Supplier", "Manufacturer", "Description", "Qty", "Location", "Category"]
+FIELDS  = ["mpn", "supplier_pn", "supplier", "manufacturer", "description", "quantity", "location", "category"]
 
 
 class PartsModel(QAbstractTableModel):
@@ -28,7 +28,7 @@ class PartsModel(QAbstractTableModel):
             value = getattr(part, FIELDS[index.column()], None)
             return str(value) if value is not None else ""
         if role == Qt.TextAlignmentRole:
-            if FIELDS[index.column()] == "quantity":
+            if FIELDS[index.column()] in ("quantity",):
                 return Qt.AlignCenter
         return None
 
@@ -51,7 +51,8 @@ def make_parts_table() -> QTableView:
     view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     view.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
     view.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-    view.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Qty
+    view.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Supplier
+    view.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Qty
     view.setEditTriggers(QTableView.NoEditTriggers)
     view.setWordWrap(False)
     view.verticalHeader().setDefaultSectionSize(36)

@@ -13,12 +13,14 @@ from mcubin.ui.parts_table import PartsModel, make_parts_table
 from mcubin.ui.add_part_screen import AddPartScreen, _resolve_location
 from mcubin.ui.edit_part_dialog import EditPartDialog
 from mcubin.ui.locations_screen import LocationsScreen
+from mcubin.ui.suppliers_screen import SuppliersScreen
 from mcubin.ui.part_detail_panel import PartDetailPanel
 
 NAV = [
     ("parts",     "Parts"),
     ("add_part",  "Add Part"),
     ("locations", "Locations"),
+    ("suppliers", "Suppliers"),
     ("settings",  "Settings"),
 ]
 
@@ -49,6 +51,7 @@ class MainWindow(QMainWindow):
             "parts":     self._make_parts_page(),
             "add_part":  AddPartScreen(on_done=self._on_add_done),
             "locations": LocationsScreen(),
+            "suppliers": SuppliersScreen(),
             "settings":  self._make_placeholder("Settings", "App settings coming soon."),
         }
         for page in self._pages.values():
@@ -208,6 +211,7 @@ class MainWindow(QMainWindow):
             self._load_parts(self.search_input.text())
             self.status.showMessage("Part updated", 3000)
 
+
     def _delete_parts(self, parts: list):
         count = len(parts)
         if count == 1:
@@ -247,7 +251,10 @@ class MainWindow(QMainWindow):
 
     def _load_parts(self, search: str = ""):
         with Session() as session:
-            q = session.query(Part).options(joinedload(Part.location_obj))
+            q = session.query(Part).options(
+                joinedload(Part.location_obj),
+                joinedload(Part.supplier_obj),
+            )
             if search:
                 like = f"%{search}%"
                 q = q.filter(

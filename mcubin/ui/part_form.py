@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QSpinBox, QLabel, QFrame, QComboBox,
 )
 from mcubin.database import Session
-from mcubin.models import Location, Part
+from mcubin.models import Location, Part, Supplier
 
 
 def _form_label(text: str) -> QLabel:
@@ -26,6 +26,12 @@ def _divider() -> QFrame:
 def _load_locations() -> list[tuple[int, str]]:
     with Session() as session:
         rows = session.query(Location.id, Location.name).order_by(Location.name).all()
+    return list(rows)
+
+
+def _load_suppliers() -> list[tuple[int, str]]:
+    with Session() as session:
+        rows = session.query(Supplier.id, Supplier.name).order_by(Supplier.name).all()
     return list(rows)
 
 
@@ -98,8 +104,10 @@ class PartForm(QWidget):
         detail_form.setLabelAlignment(Qt.AlignRight)
         detail_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
-        self.supplier_edit = QLineEdit()
-        self.supplier_edit.setPlaceholderText("e.g. Mouser, DigiKey")
+        self.supplier_combo = QComboBox()
+        self.supplier_combo.setPlaceholderText("Select supplier…")
+        self._reload_suppliers()
+
         self.mfr_edit = QLineEdit()
         self.mfr_edit.setPlaceholderText("e.g. STMicroelectronics")
         self.desc_edit = QLineEdit()
@@ -114,12 +122,23 @@ class PartForm(QWidget):
         self.cat_edit = QLineEdit()
         self.cat_edit.setPlaceholderText("e.g. MCU")
 
-        detail_form.addRow(_form_label("Supplier"), self.supplier_edit)
+        detail_form.addRow(_form_label("Supplier"), self.supplier_combo)
         detail_form.addRow(_form_label("Manufacturer"), self.mfr_edit)
         detail_form.addRow(_form_label("Description"), self.desc_edit)
         detail_form.addRow(_form_label("Location"), self.loc_combo)
         detail_form.addRow(_form_label("Category"), self.cat_edit)
         root.addLayout(detail_form)
+
+    def _reload_suppliers(self):
+        self.supplier_combo.blockSignals(True)
+        current_id = self.supplier_combo.currentData()
+        self.supplier_combo.clear()
+        self.supplier_combo.addItem("", userData=None)
+        for sup_id, name in _load_suppliers():
+            self.supplier_combo.addItem(name, userData=sup_id)
+        idx = self.supplier_combo.findData(current_id)
+        self.supplier_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.supplier_combo.blockSignals(False)
 
     def _reload_locations(self):
         self.loc_combo.blockSignals(True)
@@ -135,18 +154,21 @@ class PartForm(QWidget):
         self.mpn_edit.setText(part.mpn or "")
         self.supplier_pn_edit.setText(part.supplier_pn or "")
         self.qty_spin.setValue(part.quantity)
-        self.supplier_edit.setText(part.supplier or "")
+        idx = self.supplier_combo.findData(part.supplier_id)
+        self.supplier_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self.mfr_edit.setText(part.manufacturer or "")
         self.desc_edit.setText(part.description or "")
         self.loc_combo.setCurrentText(part.location or "")
         self.cat_edit.setText(part.category or "")
 
     def clear(self):
-        for w in (self.mpn_edit, self.supplier_pn_edit, self.supplier_edit,
-                  self.mfr_edit, self.desc_edit, self.cat_edit):
+        for w in (self.mpn_edit, self.supplier_pn_edit, self.mfr_edit,
+                  self.desc_edit, self.cat_edit):
             w.clear()
+        self.supplier_combo.setCurrentIndex(0)
         self.loc_combo.setCurrentText("")
         self.qty_spin.setValue(1)
+        self._reload_suppliers()
         self._reload_locations()
 
     def get_data(self) -> dict:
@@ -154,7 +176,7 @@ class PartForm(QWidget):
             "mpn":           self.mpn_edit.text().strip() or None,
             "supplier_pn":   self.supplier_pn_edit.text().strip() or None,
             "quantity":      self.qty_spin.value(),
-            "supplier":      self.supplier_edit.text().strip() or None,
+            "supplier_id":   self.supplier_combo.currentData(),
             "manufacturer":  self.mfr_edit.text().strip() or None,
             "description":   self.desc_edit.text().strip() or None,
             "location_name": self.loc_combo.currentText().strip() or None,
