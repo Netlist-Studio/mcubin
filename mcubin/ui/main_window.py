@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
-    QMessageBox, QMenu,
+    QMessageBox, QMenu, QSplitter,
 )
 from sqlalchemy.orm import joinedload
 
@@ -12,6 +12,7 @@ from mcubin.ui.parts_table import PartsModel, make_parts_table
 from mcubin.ui.add_part_screen import AddPartScreen, _resolve_location
 from mcubin.ui.edit_part_dialog import EditPartDialog
 from mcubin.ui.locations_screen import LocationsScreen
+from mcubin.ui.part_detail_panel import PartDetailPanel
 
 NAV = [
     ("parts",     "Parts"),
@@ -97,7 +98,17 @@ class MainWindow(QMainWindow):
         self.table.doubleClicked.connect(self._on_row_double_clicked)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
-        layout.addWidget(self.table)
+        self.table.selectionModel().currentChanged.connect(self._on_current_changed)
+
+        self.detail_panel = PartDetailPanel(on_edit=self._edit_part)
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.addWidget(self.table)
+        splitter.addWidget(self.detail_panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setSizes([640, 280])
+        layout.addWidget(splitter)
 
         return page
 
@@ -139,6 +150,12 @@ class MainWindow(QMainWindow):
         if saved:
             self._load_parts(self.search_input.text())
             self.status.showMessage("Part added", 3000)
+
+    def _on_current_changed(self, current, _previous):
+        if not current.isValid():
+            self.detail_panel.show_empty()
+        else:
+            self.detail_panel.load(self.model.part_at(current.row()))
 
     # ── Edit / Delete ─────────────────────────────────────────────────────
 
@@ -230,6 +247,7 @@ class MainWindow(QMainWindow):
             parts = q.order_by(Part.updated_at.desc()).all()
             session.expunge_all()
         self.model.refresh(parts)
+        self.detail_panel.show_empty()
         count = len(parts)
         self.status.showMessage(f"{count} part{'s' if count != 1 else ''}")
 

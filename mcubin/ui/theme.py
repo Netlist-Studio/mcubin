@@ -208,6 +208,57 @@ QFrame#divider {
     max-height: 1px;
 }
 
+/* ── Detail panel ────────────────────────────────────────── */
+#detailPanel {
+    background-color: #161616;
+    border-left: 1px solid #2a2a2a;
+}
+
+#detailEmpty {
+    color: #444444;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#detailMpn {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+#detailMfr {
+    color: #888888;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+#detailFieldLabel {
+    color: #555555;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+}
+
+#detailFieldValue {
+    color: #cccccc;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+#detailFieldValue a {
+    color: #4d7fbc;
+}
+
+#detailBtnBar {
+    border-top: 1px solid #2a2a2a;
+}
+
+/* ── Splitter handle ─────────────────────────────────────── */
+QSplitter::handle {
+    background-color: #2a2a2a;
+    width: 1px;
+}
+
 /* ── ComboBox dropdown ───────────────────────────────────── */
 QAbstractItemView {
     background-color: #242424;
