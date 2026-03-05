@@ -8,6 +8,7 @@ from sqlalchemy import func
 
 from mcubin.database import Session
 from mcubin.models import Supplier, Part, PROVIDERS
+from mcubin.ui.dialogs import confirm
 
 
 PROVIDER_LABELS = {
@@ -230,21 +231,10 @@ class SuppliersScreen(QWidget):
 
     def _delete_supplier(self, sup_id: int, name: str, part_count: int):
         if part_count > 0:
-            reply = QMessageBox.question(
-                self, "Delete Supplier",
-                f'"{name}" is used by {part_count} part(s).\n'
-                f'Clear their supplier and delete?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
+            msg = f'"{name}" is used by {part_count} part(s).\nClear their supplier and delete?'
         else:
-            reply = QMessageBox.question(
-                self, "Delete Supplier",
-                f'Delete "{name}"?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-        if reply != QMessageBox.Yes:
+            msg = f'Delete "{name}"?'
+        if not confirm(self, msg):
             return
         with Session() as session:
             session.query(Part).filter_by(supplier_id=sup_id).update({"supplier_id": None})

@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QTableView, QHeaderView, QMessageBox, QMenu, QInputDialog,
     QAbstractItemView,
 )
+
+from mcubin.ui.dialogs import confirm
 from sqlalchemy import func
 
 from mcubin.database import Session
@@ -161,24 +163,11 @@ class LocationsScreen(QWidget):
 
     def _delete_location(self, loc_id: int, name: str, part_count: int):
         if part_count > 0:
-            reply = QMessageBox.question(
-                self, "Delete Location",
-                f'"{name}" is used by {part_count} part(s).\n'
-                f'Clear their location and delete?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
+            msg = f'"{name}" is used by {part_count} part(s).\nClear their location and delete?'
         else:
-            reply = QMessageBox.question(
-                self, "Delete Location",
-                f'Delete "{name}"?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
+            msg = f'Delete "{name}"?'
+        if not confirm(self, msg):
+            return
 
         with Session() as session:
             session.query(Part).filter_by(location_id=loc_id).update({"location_id": None})

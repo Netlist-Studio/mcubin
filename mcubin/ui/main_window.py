@@ -1,9 +1,8 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
-    QMessageBox, QMenu, QSplitter,
+    QMenu, QSplitter,
 )
 from sqlalchemy.orm import joinedload
 
@@ -15,6 +14,7 @@ from mcubin.ui.edit_part_dialog import EditPartDialog
 from mcubin.ui.locations_screen import LocationsScreen
 from mcubin.ui.suppliers_screen import SuppliersScreen
 from mcubin.ui.part_detail_panel import PartDetailPanel
+from mcubin.ui.dialogs import confirm
 
 NAV = [
     ("parts",     "Parts"),
@@ -219,8 +219,7 @@ class MainWindow(QMainWindow):
             msg = f"Delete {label}?"
         else:
             msg = f"Delete {count} parts?"
-        reply = self._confirm(msg)
-        if reply == QMessageBox.Yes:
+        if confirm(self, msg):
             ids = [p.id for p in parts]
             with Session() as session:
                 session.query(Part).filter(Part.id.in_(ids)).delete()
@@ -229,23 +228,6 @@ class MainWindow(QMainWindow):
             self.status.showMessage(
                 f"Deleted {count} part{'s' if count > 1 else ''}", 3000
             )
-
-    def _confirm(self, message: str) -> int:
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Confirm")
-        dlg.setText(message)
-        dlg.setIcon(QMessageBox.NoIcon)
-        dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        dlg.setDefaultButton(QMessageBox.No)
-        for btn in dlg.buttons():
-            btn.setIcon(QIcon())
-            if dlg.buttonRole(btn) == QMessageBox.YesRole:
-                btn.setObjectName("dialogBtnConfirm")
-            else:
-                btn.setObjectName("dialogBtnCancel")
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
-        return dlg.exec()
 
     # ── Data ──────────────────────────────────────────────────────────────
 
