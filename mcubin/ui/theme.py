@@ -157,10 +157,11 @@ QPushButton#primaryBtn:pressed {
 /* ── Status bar ──────────────────────────────────────────── */
 QStatusBar {
     background-color: #0f0f0f;
-    color: #555555;
+    color: #aaaaaa;
     border-top: 1px solid #242424;
-    font-size: 13px;
+    font-size: 14px;
     letter-spacing: 0.3px;
+    padding: 2px 8px;
 }
 
 /* ── Scrollbars ──────────────────────────────────────────── */
@@ -213,6 +214,34 @@ QLabel#formLabel {
 QLabel#feedbackError {
     color: #cf6679;
     font-size: 14px;
+}
+
+QLabel#feedbackSuccess {
+    color: #4caf50;
+    font-size: 14px;
+}
+
+/* ── Checkbox ────────────────────────────────────────────── */
+QCheckBox {
+    color: #cccccc;
+    font-size: 15px;
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #444444;
+    background-color: #1e1e1e;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #2952a3;
+    border-color: #2952a3;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #5c85d6;
 }
 
 /* ── Divider ─────────────────────────────────────────────── */

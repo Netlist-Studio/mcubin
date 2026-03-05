@@ -6,11 +6,12 @@ from mcubin.ui.part_form import PartForm, _divider
 
 
 class EditPartDialog(QDialog):
-    def __init__(self, part: Part, parent=None):
+    def __init__(self, part: Part, on_status=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Part")
         self.setMinimumWidth(500)
         self.setModal(True)
+        self._on_status = on_status
         self._build_ui(part)
 
     def _build_ui(self, part: Part):
@@ -25,7 +26,7 @@ class EditPartDialog(QDialog):
         root.addWidget(_divider())
         root.addSpacing(16)
 
-        self.form = PartForm(scan_mode=False)
+        self.form = PartForm(scan_mode=False, on_status=self._on_status)
         self.form.populate(part)
         root.addWidget(self.form)
 

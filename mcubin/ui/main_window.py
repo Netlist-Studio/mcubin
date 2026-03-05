@@ -15,6 +15,7 @@ from mcubin.ui.edit_part_dialog import EditPartDialog
 from mcubin.ui.locations_screen import LocationsScreen
 from mcubin.ui.suppliers_screen import SuppliersScreen
 from mcubin.ui.part_detail_panel import PartDetailPanel
+from mcubin.ui.settings_screen import SettingsScreen
 from mcubin.ui.dialogs import confirm
 
 NAV = [
@@ -38,6 +39,9 @@ class MainWindow(QMainWindow):
     # ── Layout ────────────────────────────────────────────────────────────
 
     def _build_ui(self):
+        self.status = QStatusBar()
+        self.setStatusBar(self.status)
+
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -50,17 +54,18 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self._pages = {
             "parts":     self._make_parts_page(),
-            "add_part":  AddPartScreen(on_done=self._on_add_done),
+            "add_part":  AddPartScreen(
+                             on_part_saved=lambda: self._load_parts(self.search_input.text()),
+                             on_done=self._on_add_done,
+                             on_status=self.status.showMessage,
+                         ),
             "locations": LocationsScreen(),
             "suppliers": SuppliersScreen(),
-            "settings":  self._make_placeholder("Settings", "App settings coming soon."),
+            "settings":  SettingsScreen(),
         }
         for page in self._pages.values():
             self.stack.addWidget(page)
         root.addWidget(self.stack, stretch=1)
-
-        self.status = QStatusBar()
-        self.setStatusBar(self.status)
 
     def _make_sidebar(self):
         sidebar = QWidget()
@@ -150,11 +155,9 @@ class MainWindow(QMainWindow):
             btn.style().unpolish(btn)
             btn.style().polish(btn)
 
-    def _on_add_done(self, saved: bool):
+    def _on_add_done(self):
         self._navigate("parts")
-        if saved:
-            self._load_parts(self.search_input.text())
-            self.status.showMessage("Part added", 3000)
+        self._load_parts(self.search_input.text())
 
     def _on_current_changed(self, current, _previous):
         if not current.isValid():
@@ -201,7 +204,7 @@ class MainWindow(QMainWindow):
         super().keyPressEvent(event)
 
     def _edit_part(self, part: Part):
-        dlg = EditPartDialog(part, parent=self)
+        dlg = EditPartDialog(part, on_status=self.status.showMessage, parent=self)
         if dlg.exec():
             data = dlg.get_data()
             location_name = data.pop("location_name")

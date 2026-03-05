@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton, QDialog, QAbstractItemView, QListWidget,
     QListWidgetItem, QDialogButtonBox, QApplication,
 )
+import mcubin.config as _config
 from mcubin.database import Session, IMAGES_DIR
 from mcubin.models import Location, Part, Supplier
 from mcubin.suppliers import get_provider_api
@@ -146,9 +147,11 @@ class PartForm(QWidget):
     In Edit mode the scan-field styling is omitted (fields are pre-filled).
     """
 
-    def __init__(self, scan_mode: bool = True, parent=None):
+    def __init__(self, scan_mode: bool = True, on_lookup_done=None, on_status=None, parent=None):
         super().__init__(parent)
         self._scan_mode = scan_mode
+        self._on_lookup_done = on_lookup_done
+        self._on_status = on_status
         self._lookup_extras: dict = {}  # datasheet, rohs_status, attributes, unit_price, price_breaks, image_url
         self._build_ui()
 
@@ -190,12 +193,9 @@ class PartForm(QWidget):
         scan_form.addRow(_form_label("Quantity"), self.qty_spin)
         root.addLayout(scan_form)
 
-        # Lookup button + status
+        # Lookup button
         lookup_row = QHBoxLayout()
         lookup_row.addStretch()
-        self._lookup_status = QLabel("")
-        self._lookup_status.setObjectName("feedbackError")
-        lookup_row.addWidget(self._lookup_status)
         self._lookup_btn = QPushButton("Lookup")
         self._lookup_btn.clicked.connect(self._do_lookup)
         lookup_row.addWidget(self._lookup_btn)
@@ -229,6 +229,8 @@ class PartForm(QWidget):
         self.loc_combo = QComboBox()
         self.loc_combo.setEditable(True)
         self.loc_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.loc_combo.setMinimumWidth(200)
+        self.loc_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.loc_combo.lineEdit().setPlaceholderText("e.g. Bin A3")
         self._reload_locations()
 
@@ -263,11 +265,15 @@ class PartForm(QWidget):
         self.loc_combo.setCurrentText(current_text)
         self.loc_combo.blockSignals(False)
 
+    def _show_status(self, msg: str, timeout: int = 0):
+        if self._on_status:
+            self._on_status(msg, timeout)
+
     def _do_lookup(self):
-        self._lookup_status.setText("")
+        self._show_status("")
         supplier_id = self.supplier_combo.currentData()
         if not supplier_id:
-            self._lookup_status.setText("Select a supplier first.")
+            self._show_status("Select a supplier first.", 4000)
             return
 
         with Session() as session:
@@ -279,16 +285,16 @@ class PartForm(QWidget):
 
         api_cls = get_provider_api(provider)
         if not api_cls:
-            self._lookup_status.setText(f"No API support for {provider}.")
+            self._show_status(f"No API support for {provider}.", 4000)
             return
         if not api_cls.is_configured(settings):
-            self._lookup_status.setText("API key not configured.")
+            self._show_status("API key not configured — check Suppliers settings.", 5000)
             return
 
         supplier_pn = self.supplier_pn_edit.text().strip()
         mpn = self.mpn_edit.text().strip()
         if not supplier_pn and not mpn:
-            self._lookup_status.setText("Enter MPN or Supplier PN.")
+            self._show_status("Enter MPN or Supplier PN.", 4000)
             return
 
         api = api_cls(settings)
@@ -299,9 +305,9 @@ class PartForm(QWidget):
             else:
                 results = api.lookup_by_mpn(mpn)
             if not results:
-                self._lookup_status.setText("No results found.")
+                self._show_status("No results found.", 4000)
                 return
-            if len(results) == 1:
+            if len(results) == 1 or _config.get("scan_accept_first"):
                 result = results[0]
             else:
                 QApplication.restoreOverrideCursor()
@@ -313,12 +319,15 @@ class PartForm(QWidget):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self._lookup_status.setText(f"Lookup failed: {e}")
+            self._show_status(f"Lookup failed: {e}", 6000)
             return
         finally:
             QApplication.restoreOverrideCursor()
 
         self._apply_result(result)
+        self._show_status(f"Lookup: {result.mpn or result.supplier_pn}", 3000)
+        if self._on_lookup_done:
+            self._on_lookup_done()
 
     def _apply_result(self, result: PartLookupResult):
         if result.mpn:
@@ -361,7 +370,6 @@ class PartForm(QWidget):
         self.loc_combo.setCurrentText("")
         self.qty_spin.setValue(1)
         self._lookup_extras = {}
-        self._lookup_status.setText("")
         self._reload_suppliers()
         self._reload_locations()
 
