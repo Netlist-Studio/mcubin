@@ -1,13 +1,26 @@
 """
 Shared form widget used by both AddPartScreen and EditPartDialog.
 """
+import logging
+import requests as _requests
+import urllib.request
+import urllib.error
+
+log = logging.getLogger(__name__)
+from datetime import datetime, timezone
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QFormLayout,
+    QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
     QLineEdit, QSpinBox, QLabel, QFrame, QComboBox,
+    QPushButton, QDialog, QAbstractItemView, QListWidget,
+    QListWidgetItem, QDialogButtonBox, QApplication,
 )
-from mcubin.database import Session
+from mcubin.database import Session, IMAGES_DIR
 from mcubin.models import Location, Part, Supplier
+from mcubin.suppliers import get_provider_api
+from mcubin.suppliers.base import PartLookupResult
 
 
 def _form_label(text: str) -> QLabel:
@@ -35,6 +48,93 @@ def _load_suppliers() -> list[tuple[int, str]]:
     return list(rows)
 
 
+def download_image(part_id: int, image_url: str) -> str | None:
+    """Download image_url and save to IMAGES_DIR/{part_id}{ext}. Returns filename or None."""
+    from urllib.parse import urlparse
+    try:
+        IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+        ext = Path(urlparse(image_url).path).suffix
+        filename = f"{part_id}{ext}"
+        dest = IMAGES_DIR / filename
+        with _requests.get(image_url, headers={"User-Agent": "Wget/1.21.3"}, stream=True, timeout=(5, 30)) as resp:
+            resp.raise_for_status()
+            content_type = resp.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                print(f"[image] unexpected content-type: {content_type}", flush=True)
+                raise ValueError(f"not an image: {content_type}")
+            dest.write_bytes(resp.content)
+        return filename
+    except Exception as e:
+        print(f"[image] error: {e}", flush=True)
+        return None
+
+
+def download_image_async(part_id: int, image_url: str) -> None:
+    """Download image in a background thread and update part.image_path when done."""
+    import threading
+
+    def _run():
+        print(f"[image] downloading for part {part_id}: {image_url}", flush=True)
+        filename = download_image(part_id, image_url)
+        if filename:
+            print(f"[image] saved: {filename}", flush=True)
+            with Session() as session:
+                part = session.get(Part, part_id)
+                if part:
+                    part.image_path = filename
+                    session.commit()
+
+        else:
+            print(f"[image] download failed for part {part_id}", flush=True)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+class _PickResultDialog(QDialog):
+    """Pick one result from a list of PartLookupResults."""
+
+    def __init__(self, results: list[PartLookupResult], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Part")
+        self.setMinimumWidth(500)
+        self.setModal(True)
+        self._results = results
+        self._selected: PartLookupResult | None = None
+        self._build_ui()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 20, 20, 16)
+        root.setSpacing(12)
+
+        root.addWidget(QLabel("Multiple results found. Select one:"))
+
+        self._list = QListWidget()
+        self._list.setSelectionMode(QAbstractItemView.SingleSelection)
+        for r in self._results:
+            text = " · ".join(filter(None, [r.mpn, r.manufacturer, r.description]))
+            item = QListWidgetItem(text or "(no description)")
+            self._list.addItem(item)
+        if self._results:
+            self._list.setCurrentRow(0)
+        self._list.itemDoubleClicked.connect(self._accept)
+        root.addWidget(self._list)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(self._accept)
+        btns.rejected.connect(self.reject)
+        root.addWidget(btns)
+
+    def _accept(self):
+        row = self._list.currentRow()
+        if row >= 0:
+            self._selected = self._results[row]
+        self.accept()
+
+    def get_selected(self) -> PartLookupResult | None:
+        return self._selected
+
+
 class PartForm(QWidget):
     """
     All editable fields for a Part, split into two sections:
@@ -49,6 +149,7 @@ class PartForm(QWidget):
     def __init__(self, scan_mode: bool = True, parent=None):
         super().__init__(parent)
         self._scan_mode = scan_mode
+        self._lookup_extras: dict = {}  # datasheet, rohs_status, attributes, unit_price, price_breaks, image_url
         self._build_ui()
 
     def _build_ui(self):
@@ -89,7 +190,19 @@ class PartForm(QWidget):
         scan_form.addRow(_form_label("Quantity"), self.qty_spin)
         root.addLayout(scan_form)
 
-        root.addSpacing(24)
+        # Lookup button + status
+        lookup_row = QHBoxLayout()
+        lookup_row.addStretch()
+        self._lookup_status = QLabel("")
+        self._lookup_status.setObjectName("feedbackError")
+        lookup_row.addWidget(self._lookup_status)
+        self._lookup_btn = QPushButton("Lookup")
+        self._lookup_btn.clicked.connect(self._do_lookup)
+        lookup_row.addWidget(self._lookup_btn)
+        root.addSpacing(8)
+        root.addLayout(lookup_row)
+
+        root.addSpacing(16)
         root.addWidget(_divider())
         root.addSpacing(24)
 
@@ -150,6 +263,85 @@ class PartForm(QWidget):
         self.loc_combo.setCurrentText(current_text)
         self.loc_combo.blockSignals(False)
 
+    def _do_lookup(self):
+        self._lookup_status.setText("")
+        supplier_id = self.supplier_combo.currentData()
+        if not supplier_id:
+            self._lookup_status.setText("Select a supplier first.")
+            return
+
+        with Session() as session:
+            sup = session.get(Supplier, supplier_id)
+            if not sup:
+                return
+            provider = sup.provider
+            settings = sup.settings or {}
+
+        api_cls = get_provider_api(provider)
+        if not api_cls:
+            self._lookup_status.setText(f"No API support for {provider}.")
+            return
+        if not api_cls.is_configured(settings):
+            self._lookup_status.setText("API key not configured.")
+            return
+
+        supplier_pn = self.supplier_pn_edit.text().strip()
+        mpn = self.mpn_edit.text().strip()
+        if not supplier_pn and not mpn:
+            self._lookup_status.setText("Enter MPN or Supplier PN.")
+            return
+
+        api = api_cls(settings)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            if supplier_pn:
+                results = api.lookup_by_supplier_pn(supplier_pn)
+            else:
+                results = api.lookup_by_mpn(mpn)
+            if not results:
+                self._lookup_status.setText("No results found.")
+                return
+            if len(results) == 1:
+                result = results[0]
+            else:
+                QApplication.restoreOverrideCursor()
+                dlg = _PickResultDialog(results, self)
+                if not dlg.exec() or not dlg.get_selected():
+                    return
+                result = dlg.get_selected()
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._lookup_status.setText(f"Lookup failed: {e}")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self._apply_result(result)
+
+    def _apply_result(self, result: PartLookupResult):
+        if result.mpn:
+            self.mpn_edit.setText(result.mpn)
+        if result.supplier_pn:
+            self.supplier_pn_edit.setText(result.supplier_pn)
+        if result.manufacturer:
+            self.mfr_edit.setText(result.manufacturer)
+        if result.description:
+            self.desc_edit.setText(result.description)
+        if result.category:
+            self.cat_edit.setText(result.category)
+
+        self._lookup_extras = {
+            "datasheet":    result.datasheet,
+            "rohs_status":  result.rohs_status,
+            "attributes":   result.attributes or {},
+            "unit_price":   result.unit_price,
+            "price_breaks": result.price_breaks or [],
+            "image_url":    result.image_url,
+            "supplier_data_updated_at": datetime.now(timezone.utc),
+        }
+
     def populate(self, part: Part):
         self.mpn_edit.setText(part.mpn or "")
         self.supplier_pn_edit.setText(part.supplier_pn or "")
@@ -168,11 +360,13 @@ class PartForm(QWidget):
         self.supplier_combo.setCurrentIndex(0)
         self.loc_combo.setCurrentText("")
         self.qty_spin.setValue(1)
+        self._lookup_extras = {}
+        self._lookup_status.setText("")
         self._reload_suppliers()
         self._reload_locations()
 
     def get_data(self) -> dict:
-        return {
+        data = {
             "mpn":           self.mpn_edit.text().strip() or None,
             "supplier_pn":   self.supplier_pn_edit.text().strip() or None,
             "quantity":      self.qty_spin.value(),
@@ -182,6 +376,8 @@ class PartForm(QWidget):
             "location_name": self.loc_combo.currentText().strip() or None,
             "category":      self.cat_edit.text().strip() or None,
         }
+        data.update(self._lookup_extras)
+        return data
 
     def focus_first(self):
         self.mpn_edit.setFocus()

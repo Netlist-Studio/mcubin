@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 DB_DIR = Path.home() / ".mcubin"
 DB_PATH = DB_DIR / "inventory.db"
+IMAGES_DIR = DB_DIR / "images"
 
 
 class Base(DeclarativeBase):

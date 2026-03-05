@@ -6,10 +6,11 @@ from PySide6.QtWidgets import (
 )
 from sqlalchemy.orm import joinedload
 
-from mcubin.database import Session
+from mcubin.database import Session, IMAGES_DIR
 from mcubin.models import Location, Part
 from mcubin.ui.parts_table import PartsModel, make_parts_table
 from mcubin.ui.add_part_screen import AddPartScreen, _resolve_location
+from mcubin.ui.part_form import download_image_async
 from mcubin.ui.edit_part_dialog import EditPartDialog
 from mcubin.ui.locations_screen import LocationsScreen
 from mcubin.ui.suppliers_screen import SuppliersScreen
@@ -159,7 +160,10 @@ class MainWindow(QMainWindow):
         if not current.isValid():
             self.detail_panel.show_empty()
         else:
-            self.detail_panel.load(self.model.part_at(current.row()))
+            part_id = self.model.part_at(current.row()).id
+            with Session() as session:
+                part = session.get(Part, part_id, options=[joinedload(Part.location_obj), joinedload(Part.supplier_obj)])
+            self.detail_panel.load(part)
 
     # ── Edit / Delete ─────────────────────────────────────────────────────
 
@@ -201,6 +205,7 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             data = dlg.get_data()
             location_name = data.pop("location_name")
+            image_url = data.pop("image_url", None)
             with Session() as session:
                 location_id = _resolve_location(session, location_name)
                 db_part = session.get(Part, part.id)
@@ -208,6 +213,8 @@ class MainWindow(QMainWindow):
                     setattr(db_part, key, value)
                 db_part.location_id = location_id
                 session.commit()
+            if image_url:
+                download_image_async(part.id, image_url)
             self._load_parts(self.search_input.text())
             self.status.showMessage("Part updated", 3000)
 
@@ -221,9 +228,14 @@ class MainWindow(QMainWindow):
             msg = f"Delete {count} parts?"
         if confirm(self, msg):
             ids = [p.id for p in parts]
+            image_paths = [p.image_path for p in parts if p.image_path]
             with Session() as session:
                 session.query(Part).filter(Part.id.in_(ids)).delete()
                 session.commit()
+            for img in image_paths:
+                f = IMAGES_DIR / img
+                if f.exists():
+                    f.unlink()
             self._load_parts(self.search_input.text())
             self.status.showMessage(
                 f"Deleted {count} part{'s' if count > 1 else ''}", 3000

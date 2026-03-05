@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -19,6 +20,14 @@ def run_migrations():
 
 def main():
     run_migrations()
+
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+        force=True,
+    )
+    logging.getLogger("mcubin").setLevel(logging.DEBUG)
+    logging.getLogger("mcubin").debug("logging initialised")
 
     app = QApplication(sys.argv)
     app.setApplicationName("mcubin")

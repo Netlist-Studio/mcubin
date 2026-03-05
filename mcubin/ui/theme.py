@@ -7,7 +7,7 @@ QWidget {
     background-color: #1a1a1a;
     color: #e8e8e8;
     font-family: "Inter", "Segoe UI", "SF Pro Display", sans-serif;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 QMainWindow {
@@ -22,7 +22,7 @@ QMainWindow {
 
 #appTitle {
     color: #ffffff;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     padding: 24px 16px 16px 16px;
     letter-spacing: 2px;
@@ -35,7 +35,7 @@ QPushButton#navItem {
     border: none;
     border-radius: 0;
     color: #606060;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     padding: 10px 16px;
     text-align: left;
@@ -73,7 +73,7 @@ QTableView::item {
 QHeaderView::section {
     background-color: #121212;
     color: #666666;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -97,7 +97,7 @@ QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
 }
 
 QLineEdit#barcodeInput {
-    font-size: 15px;
+    font-size: 17px;
     padding: 10px 14px;
     border-color: #5c85d6;
 }
@@ -110,7 +110,7 @@ QPushButton {
     padding: 7px 20px;
     color: #cccccc;
     font-weight: 500;
-    font-size: 12px;
+    font-size: 14px;
     letter-spacing: 0.5px;
     text-transform: uppercase;
 }
@@ -147,7 +147,7 @@ QPushButton#primaryBtn:pressed {
     border-radius: 0;
     padding: 8px 12px;
     color: #e8e8e8;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 #searchInput:focus {
@@ -159,7 +159,7 @@ QStatusBar {
     background-color: #0f0f0f;
     color: #555555;
     border-top: 1px solid #242424;
-    font-size: 11px;
+    font-size: 13px;
     letter-spacing: 0.3px;
 }
 
@@ -187,19 +187,19 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 /* ── Screen typography ───────────────────────────────────── */
 QLabel#screenTitle {
     color: #ffffff;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600;
     letter-spacing: 0.5px;
 }
 
 QLabel#screenSubtitle {
     color: #555555;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 QLabel#sectionLabel {
     color: #666666;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 1.2px;
     text-transform: uppercase;
@@ -207,12 +207,12 @@ QLabel#sectionLabel {
 
 QLabel#formLabel {
     color: #777777;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 QLabel#feedbackError {
     color: #cf6679;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 /* ── Divider ─────────────────────────────────────────────── */
@@ -229,25 +229,25 @@ QFrame#divider {
 
 #detailEmpty {
     color: #3a3a3a;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 #detailMpn {
     color: #ffffff;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 600;
     letter-spacing: 0.3px;
 }
 
 #detailMfr {
     color: #666666;
-    font-size: 12px;
+    font-size: 14px;
     margin-top: 2px;
 }
 
 #detailFieldLabel {
     color: #484848;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -255,7 +255,7 @@ QFrame#divider {
 
 #detailFieldValue {
     color: #bbbbbb;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 #detailFieldValue a {
@@ -264,6 +264,65 @@ QFrame#divider {
 
 #detailBtnBar {
     border-top: 1px solid #242424;
+}
+
+#detailImageContainer {
+    background-color: #0f0f0f;
+}
+
+#detailNoImage {
+    background-color: #0f0f0f;
+}
+
+#detailNoImageText {
+    color: #333333;
+    font-size: 14px;
+}
+
+#detailUploadBtn {
+    color: #555555;
+    font-size: 13px;
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    padding: 4px 10px;
+}
+
+#detailUploadBtn:hover {
+    color: #888888;
+    border-color: #404040;
+}
+
+#detailImageOverlay {
+    background-color: rgba(0, 0, 0, 210);
+}
+
+#detailImageActionBtn {
+    color: #bbbbbb;
+    font-size: 13px;
+    background: transparent;
+    border: 1px solid #555555;
+    border-radius: 3px;
+    padding: 4px 10px;
+}
+
+#detailImageActionBtn:hover {
+    color: #ffffff;
+    border-color: #888888;
+}
+
+#detailRemoveBtn {
+    color: #cc5555;
+    font-size: 13px;
+    background: transparent;
+    border: 1px solid #6a3030;
+    border-radius: 3px;
+    padding: 4px 10px;
+}
+
+#detailRemoveBtn:hover {
+    color: #ff7777;
+    border-color: #aa4444;
 }
 
 /* ── Splitter handle ─────────────────────────────────────── */
@@ -296,7 +355,7 @@ QMessageBox {
 
 QMessageBox QLabel {
     color: #cccccc;
-    font-size: 13px;
+    font-size: 15px;
     background-color: transparent;
 }
 

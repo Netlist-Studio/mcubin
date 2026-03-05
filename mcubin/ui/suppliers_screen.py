@@ -8,6 +8,8 @@ from sqlalchemy import func
 
 from mcubin.database import Session
 from mcubin.models import Supplier, Part, PROVIDERS
+from mcubin.suppliers import get_provider_api
+from mcubin.suppliers.base import SettingsField
 from mcubin.ui.dialogs import confirm
 
 
@@ -61,17 +63,18 @@ class _SuppliersModel(QAbstractTableModel):
 class _SupplierDialog(QDialog):
     """Add or edit a supplier."""
 
-    def __init__(self, parent=None, name="", provider="mouser", api_key=""):
+    def __init__(self, parent=None, name="", provider="mouser", settings=None):
         super().__init__(parent)
         self.setWindowTitle("Supplier")
-        self.setMinimumWidth(380)
+        self.setMinimumWidth(400)
         self.setModal(True)
-        self._build_ui(name, provider, api_key)
+        self._settings_widgets: dict[str, QLineEdit] = {}
+        self._build_ui(name, provider, settings or {})
 
-    def _build_ui(self, name, provider, api_key):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 20)
-        root.setSpacing(16)
+    def _build_ui(self, name, provider, settings):
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(24, 24, 24, 20)
+        self._root.setSpacing(16)
 
         form = QFormLayout()
         form.setSpacing(10)
@@ -79,7 +82,7 @@ class _SupplierDialog(QDialog):
         form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self.name_edit = QLineEdit(name)
-        self.name_edit.setPlaceholderText("e.g. Mouser")
+        self.name_edit.setPlaceholderText("e.g. Mouser Electronics")
 
         self.provider_combo = QComboBox()
         for key in PROVIDERS:
@@ -88,14 +91,21 @@ class _SupplierDialog(QDialog):
         if idx >= 0:
             self.provider_combo.setCurrentIndex(idx)
 
-        self.api_key_edit = QLineEdit(api_key)
-        self.api_key_edit.setPlaceholderText("API key (optional for now)")
-        self.api_key_edit.setEchoMode(QLineEdit.Password)
-
         form.addRow(QLabel("Name"), self.name_edit)
         form.addRow(QLabel("Provider"), self.provider_combo)
-        form.addRow(QLabel("API Key"), self.api_key_edit)
-        root.addLayout(form)
+        self._root.addLayout(form)
+
+        # Dynamic settings fields container
+        self._settings_form = QFormLayout()
+        self._settings_form.setSpacing(10)
+        self._settings_form.setLabelAlignment(Qt.AlignRight)
+        self._settings_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        self._root.addLayout(self._settings_form)
+
+        self._rebuild_settings(provider, settings)
+        self.provider_combo.currentIndexChanged.connect(
+            lambda: self._rebuild_settings(self.provider_combo.currentData(), {})
+        )
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -107,18 +117,39 @@ class _SupplierDialog(QDialog):
         save_btn.clicked.connect(self._on_save)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)
-        root.addLayout(btn_row)
+        self._root.addLayout(btn_row)
+
+    def _rebuild_settings(self, provider: str, settings: dict):
+        # Clear existing settings widgets
+        while self._settings_form.rowCount():
+            self._settings_form.removeRow(0)
+        self._settings_widgets.clear()
+
+        api_cls = get_provider_api(provider)
+        if not api_cls:
+            return
+
+        for field in api_cls.settings_fields():
+            edit = QLineEdit(settings.get(field.key, ""))
+            if field.field_type == "password":
+                edit.setEchoMode(QLineEdit.Password)
+            if field.help_text:
+                edit.setPlaceholderText(field.help_text)
+            self._settings_widgets[field.key] = edit
+            label = QLabel(field.label)
+            self._settings_form.addRow(label, edit)
 
     def _on_save(self):
         if not self.name_edit.text().strip():
             return
         self.accept()
 
-    def get_values(self) -> tuple[str, str, str]:
+    def get_values(self) -> tuple[str, str, dict]:
+        settings = {key: w.text().strip() for key, w in self._settings_widgets.items() if w.text().strip()}
         return (
             self.name_edit.text().strip(),
             self.provider_combo.currentData(),
-            self.api_key_edit.text().strip(),
+            settings,
         )
 
 
@@ -184,12 +215,12 @@ class SuppliersScreen(QWidget):
         dlg = _SupplierDialog(self)
         if not dlg.exec():
             return
-        name, provider, api_key = dlg.get_values()
+        name, provider, settings = dlg.get_values()
         with Session() as session:
             if session.query(Supplier).filter_by(name=name).first():
                 QMessageBox.warning(self, "Duplicate", f'Supplier "{name}" already exists.')
                 return
-            session.add(Supplier(name=name, provider=provider, api_key=api_key or None))
+            session.add(Supplier(name=name, provider=provider, settings=settings or None))
             session.commit()
         self._refresh()
 
@@ -211,12 +242,12 @@ class SuppliersScreen(QWidget):
     def _edit_supplier(self, sup_id: int, name: str, provider: str):
         with Session() as session:
             sup = session.get(Supplier, sup_id)
-            api_key = sup.api_key or ""
+            existing_settings = sup.settings or {}
 
-        dlg = _SupplierDialog(self, name=name, provider=provider, api_key=api_key)
+        dlg = _SupplierDialog(self, name=name, provider=provider, settings=existing_settings)
         if not dlg.exec():
             return
-        new_name, new_provider, new_api_key = dlg.get_values()
+        new_name, new_provider, new_settings = dlg.get_values()
         with Session() as session:
             existing = session.query(Supplier).filter_by(name=new_name).first()
             if existing and existing.id != sup_id:
@@ -225,7 +256,7 @@ class SuppliersScreen(QWidget):
             sup = session.get(Supplier, sup_id)
             sup.name = new_name
             sup.provider = new_provider
-            sup.api_key = new_api_key or None
+            sup.settings = new_settings or None
             session.commit()
         self._refresh()
 

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from mcubin.database import Session
 from mcubin.models import Location, Part
-from mcubin.ui.part_form import PartForm
+from mcubin.ui.part_form import PartForm, download_image_async
 
 
 def _resolve_location(session, name: str | None) -> int | None:
@@ -74,10 +74,15 @@ class AddPartScreen(QWidget):
         try:
             data = self.form.get_data()
             location_name = data.pop("location_name")
+            image_url = data.pop("image_url", None)
             with Session() as session:
                 location_id = _resolve_location(session, location_name)
-                session.add(Part(**data, location_id=location_id))
+                part = Part(**data, location_id=location_id)
+                session.add(part)
                 session.commit()
+                part_id = part.id
+            if image_url:
+                download_image_async(part_id, image_url)
             self._on_done(True)
         except IntegrityError:
             self.feedback.setText("Failed to save — check for duplicate entries.")
