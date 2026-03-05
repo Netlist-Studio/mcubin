@@ -22,10 +22,35 @@ QMainWindow {
 
 #appTitle {
     color: #ffffff;
-    font-size: 16px;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 24px 16px 16px 16px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Nav items — QPushButton used as sidebar tabs */
+QPushButton#navItem {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #666666;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 14px;
+    text-align: left;
+}
+
+QPushButton#navItem:hover {
+    background-color: #1e1e1e;
+    color: #cccccc;
+    border: none;
+}
+
+QPushButton#navItem[active=true] {
+    background-color: #1e1e1e;
+    color: #ffffff;
     font-weight: 600;
-    padding: 24px 16px 8px 16px;
-    letter-spacing: 0.5px;
 }
 
 /* ── Table ───────────────────────────────────────────────── */
@@ -147,9 +172,16 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0;
 }
 
-/* ── Dialog / Panel ──────────────────────────────────────── */
-QDialog {
-    background-color: #1e1e1e;
+/* ── Screen typography ───────────────────────────────────── */
+QLabel#screenTitle {
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+QLabel#screenSubtitle {
+    color: #666666;
+    font-size: 13px;
 }
 
 QLabel#sectionLabel {
@@ -160,6 +192,17 @@ QLabel#sectionLabel {
     text-transform: uppercase;
 }
 
+QLabel#formLabel {
+    color: #888888;
+    font-size: 12px;
+}
+
+QLabel#feedbackError {
+    color: #e05c5c;
+    font-size: 12px;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
 QFrame#divider {
     background-color: #2a2a2a;
     max-height: 1px;
