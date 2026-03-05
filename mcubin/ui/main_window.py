@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
@@ -214,12 +215,7 @@ class MainWindow(QMainWindow):
             msg = f"Delete {label}?"
         else:
             msg = f"Delete {count} parts?"
-        reply = QMessageBox.question(
-            self, "Delete",
-            msg,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
+        reply = self._confirm(msg)
         if reply == QMessageBox.Yes:
             ids = [p.id for p in parts]
             with Session() as session:
@@ -229,6 +225,23 @@ class MainWindow(QMainWindow):
             self.status.showMessage(
                 f"Deleted {count} part{'s' if count > 1 else ''}", 3000
             )
+
+    def _confirm(self, message: str) -> int:
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Confirm")
+        dlg.setText(message)
+        dlg.setIcon(QMessageBox.NoIcon)
+        dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        dlg.setDefaultButton(QMessageBox.No)
+        for btn in dlg.buttons():
+            btn.setIcon(QIcon())
+            if dlg.buttonRole(btn) == QMessageBox.YesRole:
+                btn.setObjectName("dialogBtnConfirm")
+            else:
+                btn.setObjectName("dialogBtnCancel")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+        return dlg.exec()
 
     # ── Data ──────────────────────────────────────────────────────────────
 
