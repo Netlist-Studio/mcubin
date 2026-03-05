@@ -4,9 +4,10 @@ Shared form widget used by both AddPartScreen and EditPartDialog.
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout,
-    QLineEdit, QSpinBox, QLabel, QFrame,
+    QLineEdit, QSpinBox, QLabel, QFrame, QComboBox,
 )
-from mcubin.models import Part
+from mcubin.database import Session
+from mcubin.models import Location, Part
 
 
 def _form_label(text: str) -> QLabel:
@@ -20,6 +21,12 @@ def _divider() -> QFrame:
     div.setObjectName("divider")
     div.setFixedHeight(1)
     return div
+
+
+def _load_locations() -> list[tuple[int, str]]:
+    with Session() as session:
+        rows = session.query(Location.id, Location.name).order_by(Location.name).all()
+    return list(rows)
 
 
 class PartForm(QWidget):
@@ -97,17 +104,32 @@ class PartForm(QWidget):
         self.mfr_edit.setPlaceholderText("e.g. STMicroelectronics")
         self.desc_edit = QLineEdit()
         self.desc_edit.setPlaceholderText("Short description")
-        self.loc_edit = QLineEdit()
-        self.loc_edit.setPlaceholderText("e.g. Bin A3")
+
+        self.loc_combo = QComboBox()
+        self.loc_combo.setEditable(True)
+        self.loc_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.loc_combo.lineEdit().setPlaceholderText("e.g. Bin A3")
+        self._reload_locations()
+
         self.cat_edit = QLineEdit()
         self.cat_edit.setPlaceholderText("e.g. MCU")
 
         detail_form.addRow(_form_label("Supplier"), self.supplier_edit)
         detail_form.addRow(_form_label("Manufacturer"), self.mfr_edit)
         detail_form.addRow(_form_label("Description"), self.desc_edit)
-        detail_form.addRow(_form_label("Location"), self.loc_edit)
+        detail_form.addRow(_form_label("Location"), self.loc_combo)
         detail_form.addRow(_form_label("Category"), self.cat_edit)
         root.addLayout(detail_form)
+
+    def _reload_locations(self):
+        self.loc_combo.blockSignals(True)
+        current_text = self.loc_combo.currentText()
+        self.loc_combo.clear()
+        self.loc_combo.addItem("")
+        for loc_id, name in _load_locations():
+            self.loc_combo.addItem(name, userData=loc_id)
+        self.loc_combo.setCurrentText(current_text)
+        self.loc_combo.blockSignals(False)
 
     def populate(self, part: Part):
         self.mpn_edit.setText(part.mpn or "")
@@ -116,25 +138,27 @@ class PartForm(QWidget):
         self.supplier_edit.setText(part.supplier or "")
         self.mfr_edit.setText(part.manufacturer or "")
         self.desc_edit.setText(part.description or "")
-        self.loc_edit.setText(part.location or "")
+        self.loc_combo.setCurrentText(part.location or "")
         self.cat_edit.setText(part.category or "")
 
     def clear(self):
         for w in (self.mpn_edit, self.supplier_pn_edit, self.supplier_edit,
-                  self.mfr_edit, self.desc_edit, self.loc_edit, self.cat_edit):
+                  self.mfr_edit, self.desc_edit, self.cat_edit):
             w.clear()
+        self.loc_combo.setCurrentText("")
         self.qty_spin.setValue(1)
+        self._reload_locations()
 
     def get_data(self) -> dict:
         return {
-            "mpn":          self.mpn_edit.text().strip() or None,
-            "supplier_pn":  self.supplier_pn_edit.text().strip() or None,
-            "quantity":     self.qty_spin.value(),
-            "supplier":     self.supplier_edit.text().strip() or None,
-            "manufacturer": self.mfr_edit.text().strip() or None,
-            "description":  self.desc_edit.text().strip() or None,
-            "location":     self.loc_edit.text().strip() or None,
-            "category":     self.cat_edit.text().strip() or None,
+            "mpn":           self.mpn_edit.text().strip() or None,
+            "supplier_pn":   self.supplier_pn_edit.text().strip() or None,
+            "quantity":      self.qty_spin.value(),
+            "supplier":      self.supplier_edit.text().strip() or None,
+            "manufacturer":  self.mfr_edit.text().strip() or None,
+            "description":   self.desc_edit.text().strip() or None,
+            "location_name": self.loc_combo.currentText().strip() or None,
+            "category":      self.cat_edit.text().strip() or None,
         }
 
     def focus_first(self):

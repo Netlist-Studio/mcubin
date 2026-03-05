@@ -7,8 +7,19 @@ from PySide6.QtWidgets import (
 from sqlalchemy.exc import IntegrityError
 
 from mcubin.database import Session
-from mcubin.models import Part
+from mcubin.models import Location, Part
 from mcubin.ui.part_form import PartForm
+
+
+def _resolve_location(session, name: str | None) -> int | None:
+    if not name:
+        return None
+    loc = session.query(Location).filter_by(name=name).first()
+    if not loc:
+        loc = Location(name=name)
+        session.add(loc)
+        session.flush()
+    return loc.id
 
 
 class AddPartScreen(QWidget):
@@ -61,8 +72,11 @@ class AddPartScreen(QWidget):
 
     def _save(self):
         try:
+            data = self.form.get_data()
+            location_name = data.pop("location_name")
             with Session() as session:
-                session.add(Part(**self.form.get_data()))
+                location_id = _resolve_location(session, location_name)
+                session.add(Part(**data, location_id=location_id))
                 session.commit()
             self._on_done(True)
         except IntegrityError:

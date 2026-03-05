@@ -4,12 +4,14 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
     QMessageBox, QMenu,
 )
+from sqlalchemy.orm import joinedload
 
 from mcubin.database import Session
-from mcubin.models import Part
+from mcubin.models import Location, Part
 from mcubin.ui.parts_table import PartsModel, make_parts_table
-from mcubin.ui.add_part_screen import AddPartScreen
+from mcubin.ui.add_part_screen import AddPartScreen, _resolve_location
 from mcubin.ui.edit_part_dialog import EditPartDialog
+from mcubin.ui.locations_screen import LocationsScreen
 
 NAV = [
     ("parts",     "Parts"),
@@ -44,7 +46,7 @@ class MainWindow(QMainWindow):
         self._pages = {
             "parts":     self._make_parts_page(),
             "add_part":  AddPartScreen(on_done=self._on_add_done),
-            "locations": self._make_placeholder("Locations", "Bin and shelf management coming soon."),
+            "locations": LocationsScreen(),
             "settings":  self._make_placeholder("Settings", "App settings coming soon."),
         }
         for page in self._pages.values():
@@ -176,10 +178,14 @@ class MainWindow(QMainWindow):
     def _edit_part(self, part: Part):
         dlg = EditPartDialog(part, parent=self)
         if dlg.exec():
+            data = dlg.get_data()
+            location_name = data.pop("location_name")
             with Session() as session:
+                location_id = _resolve_location(session, location_name)
                 db_part = session.get(Part, part.id)
-                for key, value in dlg.get_data().items():
+                for key, value in data.items():
                     setattr(db_part, key, value)
+                db_part.location_id = location_id
                 session.commit()
             self._load_parts(self.search_input.text())
             self.status.showMessage("Part updated", 3000)
@@ -211,14 +217,14 @@ class MainWindow(QMainWindow):
 
     def _load_parts(self, search: str = ""):
         with Session() as session:
-            q = session.query(Part)
+            q = session.query(Part).options(joinedload(Part.location_obj))
             if search:
                 like = f"%{search}%"
                 q = q.filter(
                     Part.mpn.ilike(like) |
                     Part.description.ilike(like) |
                     Part.manufacturer.ilike(like) |
-                    Part.location.ilike(like) |
+                    Part.location_obj.has(Location.name.ilike(like)) |
                     Part.category.ilike(like)
                 )
             parts = q.order_by(Part.updated_at.desc()).all()

@@ -207,4 +207,20 @@ QFrame#divider {
     background-color: #2a2a2a;
     max-height: 1px;
 }
+
+/* ── ComboBox dropdown ───────────────────────────────────── */
+QAbstractItemView {
+    background-color: #242424;
+    border: 1px solid #333333;
+    outline: none;
+}
+
+QAbstractItemView::item {
+    padding: 6px 10px;
+}
+
+QAbstractItemView::item:selected {
+    background-color: #2d4f7c;
+    color: #ffffff;
+}
 """
