@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableView, QHeaderView, QMessageBox, QMenu, QAbstractItemView,
-    QDialog, QFormLayout, QLineEdit, QComboBox,
+    QDialog, QFormLayout, QLineEdit, QComboBox, QCheckBox,
 )
 from sqlalchemy import func
 
@@ -130,14 +130,20 @@ class _SupplierDialog(QDialog):
             return
 
         for field in api_cls.settings_fields():
-            edit = QLineEdit(settings.get(field.key, ""))
-            if field.field_type == "password":
-                edit.setEchoMode(QLineEdit.Password)
-            if field.help_text:
-                edit.setPlaceholderText(field.help_text)
-            self._settings_widgets[field.key] = edit
             label = QLabel(field.label)
-            self._settings_form.addRow(label, edit)
+            if field.field_type == "checkbox":
+                widget = QCheckBox()
+                widget.setChecked(bool(settings.get(field.key, False)))
+                if field.help_text:
+                    widget.setToolTip(field.help_text)
+            else:
+                widget = QLineEdit(settings.get(field.key, ""))
+                if field.field_type == "password":
+                    widget.setEchoMode(QLineEdit.Password)
+                if field.help_text:
+                    widget.setPlaceholderText(field.help_text)
+            self._settings_widgets[field.key] = widget
+            self._settings_form.addRow(label, widget)
 
     def _on_save(self):
         if not self.name_edit.text().strip():
@@ -145,7 +151,12 @@ class _SupplierDialog(QDialog):
         self.accept()
 
     def get_values(self) -> tuple[str, str, dict]:
-        settings = {key: w.text().strip() for key, w in self._settings_widgets.items() if w.text().strip()}
+        settings = {}
+        for key, w in self._settings_widgets.items():
+            if isinstance(w, QCheckBox):
+                settings[key] = w.isChecked()
+            elif w.text().strip():
+                settings[key] = w.text().strip()
         return (
             self.name_edit.text().strip(),
             self.provider_combo.currentData(),

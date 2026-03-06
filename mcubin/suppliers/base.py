@@ -22,7 +22,7 @@ class PartLookupResult:
 class SettingsField:
     key: str
     label: str
-    field_type: Literal["text", "password", "oauth"]
+    field_type: Literal["text", "password", "oauth", "checkbox"]
     required: bool = True
     help_text: str = ""
 
