@@ -77,9 +77,6 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 0, 8, 16)
         layout.setSpacing(2)
 
-        title = QLabel("mcubin")
-        title.setObjectName("appTitle")
-        layout.addWidget(title)
 
         for key, label in NAV:
             btn = QPushButton(label)

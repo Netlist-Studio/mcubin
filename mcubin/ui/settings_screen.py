@@ -1,8 +1,39 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QCheckBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox,
+    QApplication,
 )
 
 import mcubin.config as config
+
+
+THEMES = [
+    "dark_amber.xml",
+    "dark_blue.xml",
+    "dark_cyan.xml",
+    "dark_lightgreen.xml",
+    "dark_pink.xml",
+    "dark_purple.xml",
+    "dark_red.xml",
+    "dark_teal.xml",
+    "dark_yellow.xml",
+    "light_amber.xml",
+    "light_blue.xml",
+    "light_blue_500.xml",
+    "light_cyan.xml",
+    "light_cyan_500.xml",
+    "light_lightgreen.xml",
+    "light_lightgreen_500.xml",
+    "light_orange.xml",
+    "light_pink.xml",
+    "light_pink_500.xml",
+    "light_purple.xml",
+    "light_purple_500.xml",
+    "light_red.xml",
+    "light_red_500.xml",
+    "light_teal.xml",
+    "light_teal_500.xml",
+    "light_yellow.xml",
+]
 
 
 class SettingsScreen(QWidget):
@@ -25,6 +56,29 @@ class SettingsScreen(QWidget):
         root.addWidget(subtitle)
         root.addSpacing(32)
 
+        # ── Appearance ─────────────────────────────────────────
+        appearance_label = QLabel("APPEARANCE")
+        appearance_label.setObjectName("sectionLabel")
+        root.addWidget(appearance_label)
+        root.addSpacing(16)
+
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(12)
+        theme_lbl = QLabel("Theme")
+        theme_lbl.setObjectName("formLabel")
+        theme_row.addWidget(theme_lbl)
+        self._theme_combo = QComboBox()
+        self._theme_combo.addItems(THEMES)
+        current_theme = config.get("theme") or "dark_blue.xml"
+        if current_theme in THEMES:
+            self._theme_combo.setCurrentIndex(THEMES.index(current_theme))
+        self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
+        theme_row.addWidget(self._theme_combo)
+        theme_row.addStretch()
+        root.addLayout(theme_row)
+        root.addSpacing(24)
+
+        # ── Scan mode ──────────────────────────────────────────
         scan_label = QLabel("SCAN MODE")
         scan_label.setObjectName("sectionLabel")
         root.addWidget(scan_label)
@@ -47,3 +101,9 @@ class SettingsScreen(QWidget):
             root.addSpacing(10)
 
         root.addStretch()
+
+    def _on_theme_changed(self, theme: str) -> None:
+        from mcubin.app import apply_theme
+        app = QApplication.instance()
+        apply_theme(app, theme)
+        config.set("theme", theme)

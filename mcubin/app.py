@@ -6,7 +6,8 @@ from PySide6.QtWidgets import QApplication
 from alembic.config import Config
 from alembic import command
 
-from mcubin.ui.theme import STYLESHEET
+import mcubin.config as config
+from mcubin.ui.theme import CUSTOM_STYLESHEET
 from mcubin.ui.main_window import MainWindow
 
 
@@ -16,6 +17,12 @@ def run_migrations():
         "script_location", str(Path(__file__).parent.parent / "alembic")
     )
     command.upgrade(alembic_cfg, "head")
+
+
+def apply_theme(app: QApplication, theme: str) -> None:
+    from qt_material import apply_stylesheet
+    apply_stylesheet(app, theme=theme)
+    app.setStyleSheet(app.styleSheet() + CUSTOM_STYLESHEET)
 
 
 def main():
@@ -30,7 +37,9 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("mcubin")
-    app.setStyleSheet(STYLESHEET)
+
+    theme = config.get("theme") or "dark_blue.xml"
+    apply_theme(app, theme)
 
     win = MainWindow()
     win.show()
