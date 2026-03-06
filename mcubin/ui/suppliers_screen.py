@@ -1,17 +1,21 @@
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QByteArray
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTableView, QHeaderView, QMessageBox, QMenu, QAbstractItemView,
-    QDialog, QFormLayout, QLineEdit, QComboBox, QCheckBox,
+    QLineEdit, QHeaderView, QMessageBox, QMenu, QAbstractItemView,
+    QDialog, QFormLayout, QComboBox, QCheckBox,
 )
+
+from mcubin.ui.parts_table import FlexTableView
 from sqlalchemy import func
 
+import mcubin.config as config
 from mcubin.database import Session
 from mcubin.models import Supplier, Part, PROVIDERS
 from mcubin.suppliers import get_provider_api
 from mcubin.suppliers.base import SettingsField
 from mcubin.ui.dialogs import confirm
 
+_CONFIG_KEY = "suppliers_table_header"
 
 PROVIDER_LABELS = {
     "mouser":  "Mouser",
@@ -52,6 +56,12 @@ class _SuppliersModel(QAbstractTableModel):
             if index.column() == 1:
                 return PROVIDER_LABELS.get(provider, provider)
             return str(count)
+        if role == Qt.UserRole:
+            if index.column() == 0:
+                return name
+            if index.column() == 1:
+                return PROVIDER_LABELS.get(provider, provider)
+            return count
         if role == Qt.TextAlignmentRole and index.column() == 2:
             return Qt.AlignCenter
         return None
@@ -120,7 +130,6 @@ class _SupplierDialog(QDialog):
         self._root.addLayout(btn_row)
 
     def _rebuild_settings(self, provider: str, settings: dict):
-        # Clear existing settings widgets
         while self._settings_form.rowCount():
             self._settings_form.removeRow(0)
         self._settings_widgets.clear()
@@ -183,29 +192,82 @@ class SuppliersScreen(QWidget):
         root.addWidget(subtitle)
 
         add_row = QHBoxLayout()
-        add_row.addStretch()
+        # Search / filter
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Filter suppliers…")
+        self._search.setObjectName("searchInput")
+        add_row.addWidget(self._search)
+
         add_btn = QPushButton("Add Supplier…")
         add_btn.setObjectName("primaryBtn")
         add_btn.clicked.connect(self._add_supplier)
         add_row.addWidget(add_btn)
         root.addLayout(add_row)
 
+        # Model + proxy
         self._model = _SuppliersModel()
-        self.table = QTableView()
-        self.table.setModel(self._model)
+        self._proxy = QSortFilterProxyModel()
+        self._proxy.setSourceModel(self._model)
+        self._proxy.setSortRole(Qt.UserRole)
+        self._proxy.setSortCaseSensitivity(Qt.CaseInsensitive)
+        self._proxy.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self._proxy.setFilterKeyColumn(-1)
+        self._search.textChanged.connect(self._proxy.setFilterFixedString)
+
+        # Table
+        self.table = FlexTableView()
+        self.table.setModel(self._proxy)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.table.setColumnWidth(2, 80)
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.setSortingEnabled(True)
+
+        header = self.table.horizontalHeader()
+        header.setSectionsMovable(True)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(False)
+        header.resizeSection(0, 240)
+        header.resizeSection(1, 120)
+        header.resizeSection(2, 80)
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._on_header_menu)
+
         self.table.doubleClicked.connect(self._on_double_click)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
         root.addWidget(self.table)
+
+        self._restore_header_state()
+
+    def _on_header_menu(self, pos):
+        header = self.table.horizontalHeader()
+        menu = QMenu(header)
+        for vi in range(header.count()):
+            li = header.logicalIndex(vi)
+            action = menu.addAction(_SuppliersModel.HEADERS[li])
+            action.setCheckable(True)
+            action.setChecked(not header.isSectionHidden(li))
+            action.triggered.connect(lambda checked, col=li: header.setSectionHidden(col, not checked))
+        menu.exec(header.mapToGlobal(pos))
+
+    def _save_header_state(self):
+        state = self.table.horizontalHeader().saveState()
+        config.set(_CONFIG_KEY, state.toBase64().data().decode())
+
+    def _restore_header_state(self):
+        saved = config.get(_CONFIG_KEY)
+        if saved:
+            self.table.horizontalHeader().restoreState(QByteArray.fromBase64(saved.encode()))
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+
+    def hideEvent(self, event):
+        self._save_header_state()
+        super().hideEvent(event)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -235,15 +297,18 @@ class SuppliersScreen(QWidget):
             session.commit()
         self._refresh()
 
+    def _source_row(self, proxy_index) -> int:
+        return self._proxy.mapToSource(proxy_index).row()
+
     def _on_double_click(self, index):
-        sup_id, name, provider, count = self._model.supplier_at(index.row())
+        sup_id, name, provider, count = self._model.supplier_at(self._source_row(index))
         self._edit_supplier(sup_id, name, provider)
 
     def _on_context_menu(self, pos):
         index = self.table.indexAt(pos)
         if not index.isValid():
             return
-        sup_id, name, provider, count = self._model.supplier_at(index.row())
+        sup_id, name, provider, count = self._model.supplier_at(self._source_row(index))
         menu = QMenu(self)
         menu.addAction("Edit", lambda: self._edit_supplier(sup_id, name, provider))
         menu.addSeparator()

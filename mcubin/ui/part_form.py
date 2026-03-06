@@ -185,7 +185,7 @@ class PartForm(QWidget):
             self.supplier_pn_edit.setPlaceholderText("Scan or type distributor PN…")
             # Enter advances through scan fields
             self.mpn_edit.returnPressed.connect(self.supplier_pn_edit.setFocus)
-            self.supplier_pn_edit.returnPressed.connect(self.qty_spin.setFocus)
+            self.supplier_pn_edit.returnPressed.connect(lambda: (self.qty_spin.setFocus(), self.qty_spin.selectAll()))
 
         scan_form.addRow(_form_label("MPN"), self.mpn_edit)
         scan_form.addRow(_form_label("Supplier PN"), self.supplier_pn_edit)

@@ -28,10 +28,9 @@ def _resolve_location(session, name: str | None) -> int | None:
 
 
 class AddPartScreen(QWidget):
-    def __init__(self, on_part_saved: Callable, on_done: Callable, on_status: Callable = None, parent=None):
+    def __init__(self, on_part_saved: Callable, on_status: Callable = None, parent=None):
         super().__init__(parent)
         self._on_part_saved = on_part_saved
-        self._on_done = on_done
         self._on_status = on_status
         self._build_ui()
 
@@ -60,9 +59,6 @@ class AddPartScreen(QWidget):
         root.addSpacing(16)
 
         btn_row = QHBoxLayout()
-        done_btn = QPushButton("Done")
-        done_btn.clicked.connect(self._on_done)
-        btn_row.addWidget(done_btn)
         btn_row.addStretch()
         self._save_btn = QPushButton("Save Part")
         self._save_btn.setObjectName("primaryBtn")
@@ -80,7 +76,8 @@ class AddPartScreen(QWidget):
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 if config.get("scan_auto_lookup"):
                     self.form._do_lookup()
-                    return True
+                self._save_btn.setFocus()
+                return True
         return super().eventFilter(obj, event)
 
     def _after_lookup(self):

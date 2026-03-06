@@ -11,11 +11,11 @@ def confirm(parent, message: str) -> bool:
     dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     dlg.setDefaultButton(QMessageBox.No)
     for btn in dlg.buttons():
-        btn.setIcon(QIcon())
         if dlg.buttonRole(btn) == QMessageBox.YesRole:
             btn.setObjectName("dialogBtnConfirm")
         else:
             btn.setObjectName("dialogBtnCancel")
         btn.style().unpolish(btn)
         btn.style().polish(btn)
+        btn.setIcon(QIcon())
     return dlg.exec() == QMessageBox.Yes

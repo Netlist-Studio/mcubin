@@ -57,7 +57,6 @@ class MainWindow(QMainWindow):
             "parts":     self._make_parts_page(),
             "add_part":  AddPartScreen(
                              on_part_saved=lambda: self._load_parts(self.search_input.text()),
-                             on_done=self._on_add_done,
                              on_status=self.status.showMessage,
                          ),
             "locations": LocationsScreen(),
@@ -154,10 +153,6 @@ class MainWindow(QMainWindow):
             btn.setProperty("active", k == key)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
-
-    def _on_add_done(self):
-        self._navigate("parts")
-        self._load_parts(self.search_input.text())
 
     def _on_current_changed(self, current, _previous):
         if not current.isValid():

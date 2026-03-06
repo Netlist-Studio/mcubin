@@ -1,15 +1,20 @@
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QByteArray
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QLineEdit, QTableView, QHeaderView, QMessageBox, QMenu, QInputDialog,
+    QLineEdit, QHeaderView, QMessageBox, QMenu, QInputDialog,
     QAbstractItemView,
 )
 
+from mcubin.ui.parts_table import FlexTableView
+
+import mcubin.config as config
 from mcubin.ui.dialogs import confirm
 from sqlalchemy import func
 
 from mcubin.database import Session
 from mcubin.models import Location, Part
+
+_CONFIG_KEY = "locations_table_header"
 
 
 class _LocationsModel(QAbstractTableModel):
@@ -41,6 +46,8 @@ class _LocationsModel(QAbstractTableModel):
         loc_id, name, count = self._rows[index.row()]
         if role == Qt.DisplayRole:
             return name if index.column() == 0 else str(count)
+        if role == Qt.UserRole:
+            return name if index.column() == 0 else count
         if role == Qt.TextAlignmentRole and index.column() == 1:
             return Qt.AlignCenter
         return None
@@ -80,22 +87,75 @@ class LocationsScreen(QWidget):
         add_row.addWidget(add_btn)
         root.addLayout(add_row)
 
-        # Table
+        # Search / filter
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Filter locations…")
+        self._search.setObjectName("searchInput")
+        root.addWidget(self._search)
+
+        # Model + proxy
         self._model = _LocationsModel()
-        self.table = QTableView()
-        self.table.setModel(self._model)
+        self._proxy = QSortFilterProxyModel()
+        self._proxy.setSourceModel(self._model)
+        self._proxy.setSortRole(Qt.UserRole)
+        self._proxy.setSortCaseSensitivity(Qt.CaseInsensitive)
+        self._proxy.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self._proxy.setFilterKeyColumn(-1)
+        self._search.textChanged.connect(self._proxy.setFilterFixedString)
+
+        # Table
+        self.table = FlexTableView()
+        self.table.setModel(self._proxy)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.table.setColumnWidth(1, 80)
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.setSortingEnabled(True)
+
+        header = self.table.horizontalHeader()
+        header.setSectionsMovable(True)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(False)
+        header.resizeSection(0, 300)
+        header.resizeSection(1, 80)
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._on_header_menu)
+
         self.table.doubleClicked.connect(self._on_double_click)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
         root.addWidget(self.table)
+
+        self._restore_header_state()
+
+    def _on_header_menu(self, pos):
+        header = self.table.horizontalHeader()
+        menu = QMenu(header)
+        for vi in range(header.count()):
+            li = header.logicalIndex(vi)
+            action = menu.addAction(_LocationsModel.HEADERS[li])
+            action.setCheckable(True)
+            action.setChecked(not header.isSectionHidden(li))
+            action.triggered.connect(lambda checked, col=li: header.setSectionHidden(col, not checked))
+        menu.exec(header.mapToGlobal(pos))
+
+    def _save_header_state(self):
+        state = self.table.horizontalHeader().saveState()
+        config.set(_CONFIG_KEY, state.toBase64().data().decode())
+
+    def _restore_header_state(self):
+        saved = config.get(_CONFIG_KEY)
+        if saved:
+            self.table.horizontalHeader().restoreState(QByteArray.fromBase64(saved.encode()))
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+
+    def hideEvent(self, event):
+        self._save_header_state()
+        super().hideEvent(event)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -126,16 +186,18 @@ class LocationsScreen(QWidget):
         self.new_name_edit.clear()
         self._refresh()
 
+    def _source_row(self, proxy_index) -> int:
+        return self._proxy.mapToSource(proxy_index).row()
+
     def _on_double_click(self, index):
-        row = index.row()
-        loc_id, name, count = self._model.location_at(row)
+        loc_id, name, count = self._model.location_at(self._source_row(index))
         self._rename_location(loc_id, name)
 
     def _on_context_menu(self, pos):
         index = self.table.indexAt(pos)
         if not index.isValid():
             return
-        loc_id, name, count = self._model.location_at(index.row())
+        loc_id, name, count = self._model.location_at(self._source_row(index))
         menu = QMenu(self)
         menu.addAction("Rename", lambda: self._rename_location(loc_id, name))
         menu.addSeparator()
