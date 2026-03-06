@@ -1,4 +1,7 @@
+import logging
 from typing import Callable
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -94,6 +97,13 @@ class AddPartScreen(QWidget):
         sticky_supplier_id  = self.form.supplier_combo.currentData()  if cfg.get("scan_sticky_supplier") else None
         sticky_location     = self.form.loc_combo.currentText()        if cfg.get("scan_sticky_location")  else ""
         sticky_category     = self.form.cat_edit.text()                if cfg.get("scan_sticky_category")   else ""
+
+        log.debug("_save called")
+        err = self.form.validate()
+        if err:
+            if self._on_status:
+                self._on_status(err, 4000)
+            return
 
         saved_mpn = self.form.mpn_edit.text().strip() or self.form.supplier_pn_edit.text().strip() or "Part"
 

@@ -41,10 +41,18 @@ class EditPartDialog(QDialog):
         save_btn = QPushButton("Save Changes")
         save_btn.setObjectName("primaryBtn")
         save_btn.setDefault(True)
-        save_btn.clicked.connect(self.accept)
+        save_btn.clicked.connect(self._save)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
+
+    def _save(self):
+        err = self.form.validate()
+        if err:
+            if self._on_status:
+                self._on_status(err, 4000)
+            return
+        self.accept()
 
     def get_data(self) -> dict:
         return self.form.get_data()

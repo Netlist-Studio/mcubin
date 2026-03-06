@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QItemSelectionModel
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from sqlalchemy.orm import joinedload
 
+import mcubin.config as _config
 from mcubin.database import Session, IMAGES_DIR
 from mcubin.models import Location, Part
 from mcubin.ui.parts_table import PartsModel, make_parts_table
@@ -31,8 +32,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("mcubin")
-        self.resize(1100, 680)
         self._build_ui()
+        self._restore_geometry()
         self._navigate("parts")
         self._load_parts()
 
@@ -264,9 +265,33 @@ class MainWindow(QMainWindow):
             parts = q.order_by(Part.updated_at.desc()).all()
             session.expunge_all()
         self.model.refresh(parts)
-        self.detail_panel.show_empty()
+        if parts:
+            self.table.selectionModel().setCurrentIndex(
+                self.model.index(0, 0),
+                QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
+            )
+        else:
+            self.detail_panel.show_empty()
         count = len(parts)
         self.status.showMessage(f"{count} part{'s' if count != 1 else ''}")
 
     def _on_search(self, text: str):
         self._load_parts(text.strip())
+
+    # ── Geometry ───────────────────────────────────────────────────────────
+
+    def _restore_geometry(self):
+        geo = _config.get("window_geometry")
+        if geo:
+            self.resize(geo["width"], geo["height"])
+            self.move(geo["x"], geo["y"])
+        else:
+            self.resize(1280, 800)
+
+    def closeEvent(self, event):
+        geo = self.geometry()
+        _config.set("window_geometry", {
+            "x": geo.x(), "y": geo.y(),
+            "width": geo.width(), "height": geo.height(),
+        })
+        super().closeEvent(event)

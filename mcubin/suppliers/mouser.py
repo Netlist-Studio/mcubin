@@ -43,16 +43,14 @@ class MouserAPI(SupplierAPI):
 
     def _post(self, path: str, payload: dict) -> dict:
         url = f"{_BASE}/{path}"
-        print(f"[mouser] POST {url}", flush=True)
-        print(f"[mouser] payload: {payload}", flush=True)
+        log.debug("POST %s payload=%s", url, payload)
         resp = requests.post(
             url,
             params={"apiKey": self._settings.get("api_key", "")},
             json=payload,
             timeout=10,
         )
-        print(f"[mouser] HTTP {resp.status_code}", flush=True)
-        print(f"[mouser] response: {resp.text[:1000]}", flush=True)
+        log.debug("HTTP %s response=%s", resp.status_code, resp.text[:1000])
         resp.raise_for_status()
         return resp.json()
 

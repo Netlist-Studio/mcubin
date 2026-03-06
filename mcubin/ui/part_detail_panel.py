@@ -5,8 +5,8 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
-    QFileDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QVBoxLayout, QWidget,
+    QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea, QVBoxLayout, QWidget,
 )
 
 from mcubin.database import Session, IMAGES_DIR
@@ -201,6 +201,25 @@ class PartDetailPanel(QWidget):
         if part.datasheet:
             self._add_link_field("Datasheet", part.datasheet)
 
+        if part.rohs_status:
+            self._add_field("RoHS", part.rohs_status)
+
+        if part.unit_price is not None:
+            self._add_field("Unit Price", f"${part.unit_price:.4f}")
+
+        if part.price_breaks:
+            self._add_price_breaks_field(part.price_breaks)
+
+        if part.attributes:
+            for key, val in part.attributes.items():
+                self._add_field(key, str(val))
+
+        if part.supplier_data_updated_at:
+            self._add_field("Supplier Data", _relative_date(part.supplier_data_updated_at))
+
+        if part.created_at:
+            self._add_field("Created", _relative_date(part.created_at))
+
         if part.updated_at:
             self._add_field("Updated", _relative_date(part.updated_at))
 
@@ -286,6 +305,38 @@ class PartDetailPanel(QWidget):
         self._part.image_path = filename
         self._image_overlay.hide()
         self._load_image_display(self._part)
+
+    def _add_price_breaks_field(self, breaks: list):
+        w = QWidget()
+        l = QVBoxLayout(w)
+        l.setContentsMargins(0, 0, 0, 0)
+        l.setSpacing(6)
+
+        lbl = QLabel("PRICE BREAKS")
+        lbl.setObjectName("detailFieldLabel")
+        l.addWidget(lbl)
+
+        grid = QWidget()
+        gl = QGridLayout(grid)
+        gl.setContentsMargins(0, 0, 0, 0)
+        gl.setHorizontalSpacing(24)
+        gl.setVerticalSpacing(4)
+
+        for col, text in enumerate(("QTY", "UNIT PRICE")):
+            h = QLabel(text)
+            h.setObjectName("detailPbHeader")
+            gl.addWidget(h, 0, col)
+
+        for row, pb in enumerate(breaks, start=1):
+            qty_lbl = QLabel(f"{pb['qty']}+")
+            qty_lbl.setObjectName("detailPbValue")
+            price_lbl = QLabel(f"${pb['price']:.4f}")
+            price_lbl.setObjectName("detailPbValue")
+            gl.addWidget(qty_lbl, row, 0)
+            gl.addWidget(price_lbl, row, 1)
+
+        l.addWidget(grid)
+        self._flayout.addWidget(w)
 
     def _add_link_field(self, label: str, url: str):
         w = QWidget()

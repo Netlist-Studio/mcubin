@@ -61,12 +61,12 @@ def download_image(part_id: int, image_url: str) -> str | None:
             resp.raise_for_status()
             content_type = resp.headers.get("Content-Type", "")
             if not content_type.startswith("image/"):
-                print(f"[image] unexpected content-type: {content_type}", flush=True)
+                log.warning("unexpected content-type: %s", content_type)
                 raise ValueError(f"not an image: {content_type}")
             dest.write_bytes(resp.content)
         return filename
     except Exception as e:
-        print(f"[image] error: {e}", flush=True)
+        log.error("image download error: %s", e)
         return None
 
 
@@ -75,18 +75,17 @@ def download_image_async(part_id: int, image_url: str) -> None:
     import threading
 
     def _run():
-        print(f"[image] downloading for part {part_id}: {image_url}", flush=True)
+        log.debug("downloading image for part %s: %s", part_id, image_url)
         filename = download_image(part_id, image_url)
         if filename:
-            print(f"[image] saved: {filename}", flush=True)
+            log.debug("image saved: %s", filename)
             with Session() as session:
                 part = session.get(Part, part_id)
                 if part:
                     part.image_path = filename
                     session.commit()
-
         else:
-            print(f"[image] download failed for part {part_id}", flush=True)
+            log.warning("image download failed for part %s", part_id)
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -386,6 +385,13 @@ class PartForm(QWidget):
         }
         data.update(self._lookup_extras)
         return data
+
+    def validate(self) -> str | None:
+        """Return an error message if the form is invalid, or None if valid."""
+        data = self.get_data()
+        if not data.get("mpn") and not data.get("supplier_pn"):
+            return "Enter at least an MPN or Supplier PN."
+        return None
 
     def focus_first(self):
         self.mpn_edit.setFocus()

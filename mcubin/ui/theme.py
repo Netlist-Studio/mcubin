@@ -291,6 +291,19 @@ QFrame#divider {
     color: #5c85d6;
 }
 
+#detailPbHeader {
+    color: #484848;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#detailPbValue {
+    color: #bbbbbb;
+    font-size: 14px;
+}
+
 #detailBtnBar {
     border-top: 1px solid #242424;
 }

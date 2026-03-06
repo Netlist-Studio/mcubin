@@ -11,7 +11,7 @@ import mcubin.models  # noqa: F401 — ensure models are registered
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Point alembic at the runtime DB path
 config.set_main_option("sqlalchemy.url", f"sqlite:///{DB_PATH}")
