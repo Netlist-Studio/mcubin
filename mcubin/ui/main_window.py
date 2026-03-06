@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload
 import mcubin.config as _config
 from mcubin.database import Session, IMAGES_DIR
 from mcubin.models import Location, Part
-from mcubin.ui.parts_table import PartsModel, make_parts_table
+from mcubin.ui.parts_table import PartsModel, make_parts_table, save_header_state, restore_header_state
 from mcubin.ui.add_part_screen import AddPartScreen, _resolve_location
 from mcubin.ui.part_form import download_image_async
 from mcubin.ui.edit_part_dialog import EditPartDialog
@@ -104,8 +104,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.search_input)
 
         self.model = PartsModel()
-        self.table = make_parts_table()
-        self.table.setModel(self.model)
+        self.table, self.proxy = make_parts_table()
+        self.proxy.setSourceModel(self.model)
+        self.table.setModel(self.proxy)
+        restore_header_state(self.table)
         self.table.doubleClicked.connect(self._on_row_double_clicked)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
@@ -164,7 +166,7 @@ class MainWindow(QMainWindow):
         if not current.isValid():
             self.detail_panel.show_empty()
         else:
-            part_id = self.model.part_at(current.row()).id
+            part_id = self.model.part_at(self.proxy.mapToSource(current).row()).id
             with Session() as session:
                 part = session.get(Part, part_id, options=[joinedload(Part.location_obj), joinedload(Part.supplier_obj)])
             self.detail_panel.load(part)
@@ -172,7 +174,7 @@ class MainWindow(QMainWindow):
     # ── Edit / Delete ─────────────────────────────────────────────────────
 
     def _selected_parts(self):
-        rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        rows = sorted({self.proxy.mapToSource(i).row() for i in self.table.selectedIndexes()})
         return [self.model.part_at(r) for r in rows]
 
     def _selected_part(self):
@@ -180,7 +182,7 @@ class MainWindow(QMainWindow):
         return parts[0] if len(parts) == 1 else None
 
     def _on_row_double_clicked(self, index):
-        part = self.model.part_at(index.row())
+        part = self.model.part_at(self.proxy.mapToSource(index).row())
         self._edit_part(part)
 
     def _on_context_menu(self, pos):
@@ -267,7 +269,7 @@ class MainWindow(QMainWindow):
         self.model.refresh(parts)
         if parts:
             self.table.selectionModel().setCurrentIndex(
-                self.model.index(0, 0),
+                self.proxy.index(0, 0),
                 QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
             )
         else:
@@ -294,4 +296,5 @@ class MainWindow(QMainWindow):
             "x": geo.x(), "y": geo.y(),
             "width": geo.width(), "height": geo.height(),
         })
+        save_header_state(self.table)
         super().closeEvent(event)
