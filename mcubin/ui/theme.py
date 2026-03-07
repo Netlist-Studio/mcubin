@@ -81,4 +81,16 @@ QPushButton#dialogBtnConfirm {
 QPushButton#dialogBtnCancel {
     background-color: transparent;
 }
+
+/* ── Label designer ───────────────────────────────────── */
+QGraphicsView {
+    border: none;
+    border-radius: 4px;
+}
+
+/* ── ComboBox dropdown: remove icon column gap ────────── */
+QComboBox QAbstractItemView::item {
+    padding-left: 8px;
+    padding-right: 8px;
+}
 """

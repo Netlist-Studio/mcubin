@@ -10,6 +10,7 @@ DEFAULTS: dict = {
     "scan_sticky_location":    True,
     "scan_sticky_category":    False,
     "theme":                   "dark_blue.xml",
+    "label_printer_device":    "/dev/usb/lp0",
 }
 
 

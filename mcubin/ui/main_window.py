@@ -17,6 +17,7 @@ from mcubin.ui.locations_screen import LocationsScreen
 from mcubin.ui.suppliers_screen import SuppliersScreen
 from mcubin.ui.part_detail_panel import PartDetailPanel
 from mcubin.ui.settings_screen import SettingsScreen
+from mcubin.ui.label_designer_dialog import LabelPrintScreen
 from mcubin.ui.dialogs import confirm
 
 NAV = [
@@ -24,6 +25,7 @@ NAV = [
     ("add_part",  "Add Part"),
     ("locations", "Locations"),
     ("suppliers", "Suppliers"),
+    ("labels",    "Labels"),
     ("settings",  "Settings"),
 ]
 
@@ -59,8 +61,9 @@ class MainWindow(QMainWindow):
                              on_part_saved=lambda: self._load_parts(self.search_input.text()),
                              on_status=self.status.showMessage,
                          ),
-            "locations": LocationsScreen(),
+            "locations": LocationsScreen(on_print_labels=self._print_labels_from_locations),
             "suppliers": SuppliersScreen(),
+            "labels":    LabelPrintScreen(on_status=self.status.showMessage),
             "settings":  SettingsScreen(),
         }
         for page in self._pages.values():
@@ -190,6 +193,18 @@ class MainWindow(QMainWindow):
             lambda: self._delete_parts(parts),
         )
         menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def _print_labels(self, parts: list):
+        items = [
+            (p.mpn or p.supplier_pn or f"Part #{p.id}", p)
+            for p in parts
+        ]
+        self._pages["labels"].load_items(items, mode="parts")
+        self._navigate("labels")
+
+    def _print_labels_from_locations(self, items: list, mode: str):
+        self._pages["labels"].load_items(items, mode=mode)
+        self._navigate("labels")
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
