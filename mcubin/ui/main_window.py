@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
                              on_part_saved=lambda: self._load_parts(self.search_input.text()),
                              on_status=self.status.showMessage,
                          ),
-            "locations": LocationsScreen(on_print_labels=self._print_labels_from_locations),
+            "locations": LocationsScreen(),
             "suppliers": SuppliersScreen(),
             "labels":    LabelPrintScreen(on_status=self.status.showMessage),
             "settings":  SettingsScreen(),
@@ -200,10 +200,6 @@ class MainWindow(QMainWindow):
             for p in parts
         ]
         self._pages["labels"].load_items(items, mode="parts")
-        self._navigate("labels")
-
-    def _print_labels_from_locations(self, items: list, mode: str):
-        self._pages["labels"].load_items(items, mode=mode)
         self._navigate("labels")
 
     def keyPressEvent(self, event):

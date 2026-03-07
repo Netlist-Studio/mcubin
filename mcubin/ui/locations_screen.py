@@ -57,9 +57,8 @@ class _LocationsModel(QAbstractTableModel):
 
 
 class LocationsScreen(QWidget):
-    def __init__(self, on_print_labels=None, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._on_print_labels = on_print_labels
         self._build_ui()
 
     def _build_ui(self):
@@ -201,14 +200,9 @@ class LocationsScreen(QWidget):
         loc_id, name, count = self._model.location_at(self._source_row(index))
         menu = QMenu(self)
         menu.addAction("Rename", lambda: self._rename_location(loc_id, name))
-        menu.addAction("Print Label…", lambda: self._print_label(loc_id, name))
         menu.addSeparator()
         menu.addAction("Delete", lambda: self._delete_location(loc_id, name, count))
         menu.exec(self.table.viewport().mapToGlobal(pos))
-
-    def _print_label(self, loc_id: int, name: str):
-        if self._on_print_labels:
-            self._on_print_labels([(name, (loc_id, name))], "locations")
 
     def _rename_location(self, loc_id: int, current_name: str):
         new_name, ok = QInputDialog.getText(

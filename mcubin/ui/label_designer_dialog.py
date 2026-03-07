@@ -73,16 +73,30 @@ MODE_FIELDS: dict[str, list[tuple[str, str]]] = {
     "locations": LOCATION_FIELDS,
 }
 
-ELEMENT_DEFS: list[tuple[str, str, dict]] = [
+PART_ELEMENT_DEFS: list[tuple[str, str, dict]] = [
     ("field",   "MPN",          {"field_key": "mpn",         "label": "MPN",         "font_size": 28, "bold": True}),
     ("field",   "Description",  {"field_key": "description", "label": "Description", "font_size": 18}),
     ("field",   "Supplier PN",  {"field_key": "supplier_pn", "label": "Supplier PN", "font_size": 18}),
     ("field",   "Supplier",     {"field_key": "supplier",    "label": "Supplier",    "font_size": 18}),
     ("field",   "Qty",          {"field_key": "quantity",    "label": "Qty",         "font_size": 18}),
     ("field",   "Location",     {"field_key": "location",    "label": "Location",    "font_size": 18}),
+    ("field",   "Text",         {"field_key": None,          "label": "Text",        "font_size": 18}),
     ("barcode", "Barcode",      {"field_key": "mpn"}),
     ("line",    "Separator",    {}),
 ]
+
+LOCATION_ELEMENT_DEFS: list[tuple[str, str, dict]] = [
+    ("field",   "Name",         {"field_key": "name",        "label": "Name",        "font_size": 28, "bold": True}),
+    ("field",   "ID",           {"field_key": "id",          "label": "ID",          "font_size": 18}),
+    ("field",   "Text",         {"field_key": None,          "label": "Text",        "font_size": 18}),
+    ("barcode", "Barcode",      {"field_key": "name"}),
+    ("line",    "Separator",    {}),
+]
+
+MODE_ELEMENT_DEFS: dict[str, list] = {
+    "parts":     PART_ELEMENT_DEFS,
+    "locations": LOCATION_ELEMENT_DEFS,
+}
 
 # Canvas colour palette — tile is white/black (WYSIWYG with print output)
 _C_CANVAS_BG  = QColor("#2b2b3b")   # dark surround so white tile stands out
@@ -156,6 +170,7 @@ class FieldItem(QGraphicsTextItem):
         self.label = label
         self._font_size = font_size
         self._bold = bold
+        self._preview_value: str | None = None
         self.setFlags(_item_flags())
         self._refresh()
 
@@ -165,8 +180,12 @@ class FieldItem(QGraphicsTextItem):
         font.setBold(self._bold)
         self.setFont(font)
         self.setDefaultTextColor(_C_ITEM_TEXT)
-        display = f"[{self.label}]" if self.field_key else self.label
-        self.setPlainText(display)
+        if self._preview_value is not None:
+            self.setPlainText(self._preview_value)
+        elif self.field_key:
+            self.setPlainText(f"[{self.label}]")
+        else:
+            self.setPlainText(self.label)
 
     @property
     def font_size(self) -> int:
@@ -371,8 +390,14 @@ class _FieldPropsPanel(QWidget):
 
         self._field_combo = QComboBox()
         _fix_combo(self._field_combo)
-        self._field_combo.currentIndexChanged.connect(self._apply)
+        self._field_combo.currentIndexChanged.connect(self._on_field_changed)
         lay.addRow("Field:", self._field_combo)
+
+        self._text_label = QLabel("Text:")
+        self._text_edit = QLineEdit()
+        self._text_edit.setPlaceholderText("Enter text…")
+        self._text_edit.textChanged.connect(self._apply)
+        lay.addRow(self._text_label, self._text_edit)
 
         self._size_spin = QSpinBox()
         self._size_spin.setRange(6, 72)
@@ -387,23 +412,42 @@ class _FieldPropsPanel(QWidget):
     def load(self, item: FieldItem, fields: list[tuple[str, str]]) -> None:
         self._item = None
         self._field_combo.clear()
+        self._field_combo.addItem("Custom text", None)
         for key, name in fields:
             self._field_combo.addItem(name, key)
-        idx = next(
-            (i for i, (k, _) in enumerate(fields) if k == item.field_key), 0
-        )
-        self._field_combo.setCurrentIndex(idx)
+        if item.field_key is None:
+            self._field_combo.setCurrentIndex(0)
+            self._text_edit.setText(item.label)
+        else:
+            idx = next(
+                (i + 1 for i, (k, _) in enumerate(fields) if k == item.field_key), 1
+            )
+            self._field_combo.setCurrentIndex(idx)
+            self._text_edit.setText("")
         self._size_spin.setValue(item.font_size)
         self._bold_check.setChecked(item.bold)
+        self._update_text_row()
         self._item = item
+
+    def _update_text_row(self) -> None:
+        visible = self._field_combo.currentData() is None
+        self._text_label.setVisible(visible)
+        self._text_edit.setVisible(visible)
+
+    def _on_field_changed(self) -> None:
+        self._update_text_row()
+        self._apply()
 
     def _apply(self) -> None:
         if self._item is None:
             return
         key = self._field_combo.currentData()
-        name = self._field_combo.currentText()
+        if key is None:
+            label = self._text_edit.text() or "Text"
+        else:
+            label = self._field_combo.currentText()
         self._item.field_key = key
-        self._item.label = name
+        self._item.label = label
         self._item.font_size = self._size_spin.value()
         self._item.bold = self._bold_check.isChecked()
         self._item._refresh()
@@ -558,6 +602,8 @@ class PropertiesPanel(QWidget):
 class ItemListPanel(QWidget):
     """Scrollable checklist of parts or locations to include in the print run."""
 
+    checked_changed = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         root = QVBoxLayout(self)
@@ -648,6 +694,7 @@ class ItemListPanel(QWidget):
     def _update_count(self) -> None:
         n = len(self.checked_items())
         self._count_lbl.setText(f"{n} selected")
+        self.checked_changed.emit()
 
 
 # ---------------------------------------------------------------------------
@@ -661,22 +708,36 @@ class ElementsPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(4)
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(0, 0, 0, 0)
+        self._root.setSpacing(4)
 
         title = QLabel("Add Elements")
         title.setObjectName("sectionLabel")
-        root.addWidget(title)
+        self._root.addWidget(title)
 
-        for kind, label, kwargs in ELEMENT_DEFS:
+        self._btn_area = QWidget()
+        self._btn_layout = QVBoxLayout(self._btn_area)
+        self._btn_layout.setContentsMargins(0, 0, 0, 0)
+        self._btn_layout.setSpacing(4)
+        self._root.addWidget(self._btn_area)
+
+        self._root.addStretch()
+        self.set_mode("parts")
+
+    def set_mode(self, mode: str) -> None:
+        defs = MODE_ELEMENT_DEFS.get(mode, PART_ELEMENT_DEFS)
+        # Clear existing buttons
+        while self._btn_layout.count():
+            item = self._btn_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for kind, label, kwargs in defs:
             btn = QPushButton(f"+ {label}")
             btn.clicked.connect(
                 lambda _, k=kind, kw=kwargs: self.add_element.emit(k, dict(kw))
             )
-            root.addWidget(btn)
-
-        root.addStretch()
+            self._btn_layout.addWidget(btn)
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +824,20 @@ class LabelPrintScreen(QWidget):
             self._preselected_ids = {p.id for p in parts}
         else:
             self._preselected_ids = {d[0] if isinstance(d, tuple) else d for _, d in parts}
+        idx = self._mode_combo.findData(mode)
+        if idx >= 0:
+            self._mode_combo.blockSignals(True)
+            self._mode_combo.setCurrentIndex(idx)
+            self._mode_combo.blockSignals(False)
+        self._reload_items()
+
+    def _on_mode_changed(self, _: int) -> None:
+        self._mode = self._mode_combo.currentData()
+        self._fields = MODE_FIELDS.get(self._mode, PART_FIELDS)
+        self._preselected_ids = set()
+        self._elements_panel.set_mode(self._mode)
+        if self._tmpl_combo.currentText() == "Default":
+            self._reset_default_canvas()
         self._reload_items()
 
     def showEvent(self, event) -> None:
@@ -773,19 +848,28 @@ class LabelPrintScreen(QWidget):
 
     def _reload_items(self) -> None:
         from mcubin.database import Session
-        from mcubin.models import Part
+        from mcubin.models import Part, Location
         from sqlalchemy.orm import joinedload
-        with Session() as session:
-            parts = (
-                session.query(Part)
-                .options(joinedload(Part.supplier_obj), joinedload(Part.location_obj))
-                .order_by(Part.mpn)
-                .all()
-            )
-            session.expunge_all()
         ids = self._preselected_ids
-        items = [(p.mpn or p.supplier_pn or f"Part #{p.id}", p) for p in parts]
-        self._items_panel.set_items(items, check_fn=lambda p: p.id in ids)
+        if self._mode == "locations":
+            from types import SimpleNamespace
+            with Session() as session:
+                rows = session.query(Location.id, Location.name).order_by(Location.name).all()
+            locs = [SimpleNamespace(id=r.id, name=r.name) for r in rows]
+            items = [(loc.name, loc) for loc in locs]
+            self._items_panel.set_items(items, check_fn=lambda loc: loc.id in ids)
+        else:
+            with Session() as session:
+                parts = (
+                    session.query(Part)
+                    .options(joinedload(Part.supplier_obj), joinedload(Part.location_obj))
+                    .order_by(Part.mpn)
+                    .all()
+                )
+                session.expunge_all()
+            items = [(p.mpn or p.supplier_pn or f"Part #{p.id}", p) for p in parts]
+            self._items_panel.set_items(items, check_fn=lambda p: p.id in ids)
+        self._update_preview()
 
     # ── Layout ─────────────────────────────────────────────────────────────
 
@@ -803,7 +887,18 @@ class LabelPrintScreen(QWidget):
         left_lay.setContentsMargins(12, 12, 8, 12)
         left_lay.setSpacing(8)
 
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Show:"))
+        self._mode_combo = QComboBox()
+        _fix_combo(self._mode_combo)
+        self._mode_combo.addItem("Parts", "parts")
+        self._mode_combo.addItem("Locations", "locations")
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        mode_row.addWidget(self._mode_combo, stretch=1)
+        left_lay.addLayout(mode_row)
+
         self._items_panel = ItemListPanel()
+        self._items_panel.checked_changed.connect(self._update_preview)
         left_lay.addWidget(self._items_panel, stretch=3)
 
         sep = QFrame()
@@ -901,12 +996,24 @@ class LabelPrintScreen(QWidget):
         root.addWidget(bar)
 
     def _populate_default_template(self) -> None:
-        """Seed the canvas with a sensible starting layout."""
-        self._scene.add_field("mpn",         "MPN",         x=20, y=14,  font_size=28, bold=True)
-        self._scene.add_field("description", "Description", x=20, y=52,  font_size=18)
-        self._scene.add_field("quantity",    "Qty",         x=20, y=76,  font_size=18)
-        self._scene.add_barcode("mpn",                      x=20, y=102)
-        self._scene.add_separator(y=DEFAULT_TILE_H - 6)
+        """Seed the canvas with a sensible starting layout for the current mode."""
+        self._reset_default_canvas()
+
+    def _reset_default_canvas(self) -> None:
+        """Clear the canvas and load the built-in default for the current mode."""
+        for item in list(self._scene.items()):
+            if item is not self._scene._bg_rect:
+                self._scene.removeItem(item)
+        if self._mode == "locations":
+            self._scene.add_field("name", "Name", x=20, y=20, font_size=28, bold=True)
+            self._scene.add_barcode("name",                   x=20, y=66)
+            self._scene.add_separator(y=DEFAULT_TILE_H - 6)
+        else:
+            self._scene.add_field("mpn",         "MPN",         x=20, y=14,  font_size=28, bold=True)
+            self._scene.add_field("description", "Description", x=20, y=52,  font_size=18)
+            self._scene.add_field("quantity",    "Qty",         x=20, y=76,  font_size=18)
+            self._scene.add_barcode("mpn",                      x=20, y=102)
+            self._scene.add_separator(y=DEFAULT_TILE_H - 6)
         QTimer.singleShot(0, self._fit_canvas)
 
     def _fit_canvas(self) -> None:
@@ -972,11 +1079,8 @@ class LabelPrintScreen(QWidget):
         from mcubin.labels.template import load_template, deserialize_scene
         name = self._tmpl_combo.itemText(index)
         if name == "Default":
-            # Clear and re-seed with the built-in layout
-            for item in list(self._scene.items()):
-                if item is not self._scene._bg_rect:
-                    self._scene.removeItem(item)
-            self._populate_default_template()
+            self._reset_default_canvas()
+            self._update_preview()
             return
         try:
             data = load_template(name)
@@ -984,6 +1088,7 @@ class LabelPrintScreen(QWidget):
             # Restore tile height and sheet if saved
             if "tile_height" in data:
                 self._settings_bar._tile_spin.setValue(data["tile_height"])
+            self._update_preview()
         except Exception as exc:
             self._on_status(f"Failed to load template: {exc}", 5000)
             log.exception("Template load error")
@@ -1055,12 +1160,24 @@ class LabelPrintScreen(QWidget):
 
     # ── Rendering ──────────────────────────────────────────────────────────
 
+    def _update_preview(self) -> None:
+        """Show first checked item's data as live preview on the canvas (text only)."""
+        checked = self._items_panel.checked_items()
+        first = checked[0] if checked else None
+        for item in self._scene.items():
+            if isinstance(item, FieldItem) and item.field_key:
+                item._preview_value = (
+                    str(getattr(first, item.field_key, "") or "") if first else None
+                )
+                item._refresh()
+
     def _apply_part_data(self, part) -> None:
-        """Populate scene items with real field values from part."""
+        """Populate scene items with real field values for rendering."""
         for item in self._scene.items():
             if isinstance(item, FieldItem) and item.field_key:
                 value = str(getattr(part, item.field_key, "") or "")
-                item.setPlainText(value)
+                item._preview_value = value
+                item._refresh()
             elif isinstance(item, BarcodeItem):
                 value = str(getattr(part, item.field_key, "") or "")
                 if value:
@@ -1070,9 +1187,10 @@ class LabelPrintScreen(QWidget):
                     item.update()
 
     def _restore_placeholders(self) -> None:
-        """Restore scene items to designer placeholder display."""
+        """Clear preview/render state from scene items."""
         for item in self._scene.items():
             if isinstance(item, FieldItem):
+                item._preview_value = None
                 item._refresh()
             elif isinstance(item, BarcodeItem):
                 item._print_pixmap = None
@@ -1104,6 +1222,7 @@ class LabelPrintScreen(QWidget):
         painter.end()
         self._scene._bg_rect.setPen(QPen(_C_TILE_BDR, 1, Qt.DashLine))
         self._restore_placeholders()
+        self._update_preview()
         return image
 
     # ── Actions ────────────────────────────────────────────────────────────
