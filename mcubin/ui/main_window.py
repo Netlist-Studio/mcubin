@@ -18,7 +18,7 @@ from mcubin.ui.suppliers_screen import SuppliersScreen
 from mcubin.ui.part_detail_panel import PartDetailPanel
 from mcubin.ui.settings_screen import SettingsScreen
 from mcubin.ui.label_designer_dialog import LabelPrintScreen
-from mcubin.ui.dialogs import confirm
+from mcubin.ui.dialogs import confirm, pick_location
 
 NAV = [
     ("parts",     "Parts"),
@@ -184,12 +184,18 @@ class MainWindow(QMainWindow):
         parts = self._selected_parts()
         if not parts:
             return
+        n = len(parts)
         menu = QMenu(self)
-        if len(parts) == 1:
+        if n == 1:
             menu.addAction("Edit", lambda: self._edit_part(parts[0]))
             menu.addSeparator()
         menu.addAction(
-            f"Delete {len(parts)} part{'s' if len(parts) > 1 else ''}",
+            f"Move {n} part{'s' if n > 1 else ''} to location…",
+            lambda: self._move_to_location(parts),
+        )
+        menu.addSeparator()
+        menu.addAction(
+            f"Delete {n} part{'s' if n > 1 else ''}",
             lambda: self._delete_parts(parts),
         )
         menu.exec(self.table.viewport().mapToGlobal(pos))
@@ -227,6 +233,21 @@ class MainWindow(QMainWindow):
             self._load_parts(self.search_input.text())
             self.status.showMessage("Part updated", 3000)
 
+
+    def _move_to_location(self, parts: list):
+        with Session() as session:
+            location_names = [name for (name,) in session.query(Location.name).order_by(Location.name).all()]
+        name = pick_location(self, location_names)
+        if name is None:
+            return
+        with Session() as session:
+            location_id = _resolve_location(session, name)
+            ids = [p.id for p in parts]
+            session.query(Part).filter(Part.id.in_(ids)).update({"location_id": location_id}, synchronize_session=False)
+            session.commit()
+        self._load_parts(self.search_input.text())
+        n = len(parts)
+        self.status.showMessage(f"Moved {n} part{'s' if n > 1 else ''} to {name}", 3000)
 
     def _delete_parts(self, parts: list):
         count = len(parts)

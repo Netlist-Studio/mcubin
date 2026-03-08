@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QByteArray
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QByteArray, QEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QHeaderView, QMessageBox, QMenu, QInputDialog,
@@ -108,7 +108,7 @@ class LocationsScreen(QWidget):
         self.table.setModel(self._proxy)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setShowGrid(False)
         self.table.setWordWrap(False)
@@ -128,6 +128,7 @@ class LocationsScreen(QWidget):
         self.table.doubleClicked.connect(self._on_double_click)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
+        self.table.installEventFilter(self)
         root.addWidget(self.table)
 
         self._restore_header_state()
@@ -189,19 +190,28 @@ class LocationsScreen(QWidget):
     def _source_row(self, proxy_index) -> int:
         return self._proxy.mapToSource(proxy_index).row()
 
+    def eventFilter(self, obj, event):
+        if obj is self.table and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+                self._delete_selected()
+                return True
+        return super().eventFilter(obj, event)
+
     def _on_double_click(self, index):
         loc_id, name, count = self._model.location_at(self._source_row(index))
         self._rename_location(loc_id, name)
 
     def _on_context_menu(self, pos):
-        index = self.table.indexAt(pos)
-        if not index.isValid():
+        indexes = self.table.selectionModel().selectedRows()
+        if not indexes:
             return
-        loc_id, name, count = self._model.location_at(self._source_row(index))
+        n = len(indexes)
         menu = QMenu(self)
-        menu.addAction("Rename", lambda: self._rename_location(loc_id, name))
-        menu.addSeparator()
-        menu.addAction("Delete", lambda: self._delete_location(loc_id, name, count))
+        if n == 1:
+            loc_id, name, _ = self._model.location_at(self._source_row(indexes[0]))
+            menu.addAction("Rename", lambda: self._rename_location(loc_id, name))
+            menu.addSeparator()
+        menu.addAction(f"Delete {n} location{'s' if n > 1 else ''}", self._delete_selected)
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def _rename_location(self, loc_id: int, current_name: str):
@@ -223,16 +233,20 @@ class LocationsScreen(QWidget):
             session.commit()
         self._refresh()
 
-    def _delete_location(self, loc_id: int, name: str, part_count: int):
-        if part_count > 0:
-            msg = f'"{name}" is used by {part_count} part(s).\nClear their location and delete?'
+    def _delete_selected(self):
+        indexes = self.table.selectionModel().selectedRows()
+        if not indexes:
+            return
+        items = [self._model.location_at(self._source_row(i)) for i in indexes]
+        if len(items) == 1:
+            msg = f'Delete "{items[0][1]}"?'
         else:
-            msg = f'Delete "{name}"?'
+            msg = f"Delete {len(items)} locations?"
         if not confirm(self, msg):
             return
-
+        ids = [loc_id for loc_id, _, _ in items]
         with Session() as session:
-            session.query(Part).filter_by(location_id=loc_id).update({"location_id": None})
-            session.query(Location).filter_by(id=loc_id).delete()
+            session.query(Part).filter(Part.location_id.in_(ids)).update({"location_id": None}, synchronize_session=False)
+            session.query(Location).filter(Location.id.in_(ids)).delete(synchronize_session=False)
             session.commit()
         self._refresh()

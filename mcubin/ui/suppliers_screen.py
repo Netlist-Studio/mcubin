@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QByteArray
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QByteArray, QEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QHeaderView, QMessageBox, QMenu, QAbstractItemView,
@@ -18,6 +18,7 @@ from mcubin.ui.dialogs import confirm
 _CONFIG_KEY = "suppliers_table_header"
 
 PROVIDER_LABELS = {
+    "":        "None",
     "mouser":  "Mouser",
     "digikey": "DigiKey",
 }
@@ -73,7 +74,7 @@ class _SuppliersModel(QAbstractTableModel):
 class _SupplierDialog(QDialog):
     """Add or edit a supplier."""
 
-    def __init__(self, parent=None, name="", provider="mouser", settings=None):
+    def __init__(self, parent=None, name="", provider="", settings=None):
         super().__init__(parent)
         self.setWindowTitle("Supplier")
         self.setMinimumWidth(400)
@@ -95,6 +96,7 @@ class _SupplierDialog(QDialog):
         self.name_edit.setPlaceholderText("e.g. Mouser Electronics")
 
         self.provider_combo = QComboBox()
+        self.provider_combo.addItem("None", userData="")
         for key in PROVIDERS:
             self.provider_combo.addItem(PROVIDER_LABELS[key], userData=key)
         idx = self.provider_combo.findData(provider)
@@ -219,7 +221,7 @@ class SuppliersScreen(QWidget):
         self.table.setModel(self._proxy)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setShowGrid(False)
         self.table.setWordWrap(False)
@@ -240,6 +242,7 @@ class SuppliersScreen(QWidget):
         self.table.doubleClicked.connect(self._on_double_click)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
+        self.table.installEventFilter(self)
         root.addWidget(self.table)
 
         self._restore_header_state()
@@ -300,19 +303,28 @@ class SuppliersScreen(QWidget):
     def _source_row(self, proxy_index) -> int:
         return self._proxy.mapToSource(proxy_index).row()
 
+    def eventFilter(self, obj, event):
+        if obj is self.table and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+                self._delete_selected()
+                return True
+        return super().eventFilter(obj, event)
+
     def _on_double_click(self, index):
         sup_id, name, provider, count = self._model.supplier_at(self._source_row(index))
         self._edit_supplier(sup_id, name, provider)
 
     def _on_context_menu(self, pos):
-        index = self.table.indexAt(pos)
-        if not index.isValid():
+        indexes = self.table.selectionModel().selectedRows()
+        if not indexes:
             return
-        sup_id, name, provider, count = self._model.supplier_at(self._source_row(index))
+        n = len(indexes)
         menu = QMenu(self)
-        menu.addAction("Edit", lambda: self._edit_supplier(sup_id, name, provider))
-        menu.addSeparator()
-        menu.addAction("Delete", lambda: self._delete_supplier(sup_id, name, count))
+        if n == 1:
+            sup_id, name, provider, _ = self._model.supplier_at(self._source_row(indexes[0]))
+            menu.addAction("Edit", lambda: self._edit_supplier(sup_id, name, provider))
+            menu.addSeparator()
+        menu.addAction(f"Delete {n} supplier{'s' if n > 1 else ''}", self._delete_selected)
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def _edit_supplier(self, sup_id: int, name: str, provider: str):
@@ -336,15 +348,20 @@ class SuppliersScreen(QWidget):
             session.commit()
         self._refresh()
 
-    def _delete_supplier(self, sup_id: int, name: str, part_count: int):
-        if part_count > 0:
-            msg = f'"{name}" is used by {part_count} part(s).\nClear their supplier and delete?'
+    def _delete_selected(self):
+        indexes = self.table.selectionModel().selectedRows()
+        if not indexes:
+            return
+        items = [self._model.supplier_at(self._source_row(i)) for i in indexes]
+        if len(items) == 1:
+            msg = f'Delete "{items[0][1]}"?'
         else:
-            msg = f'Delete "{name}"?'
+            msg = f"Delete {len(items)} suppliers?"
         if not confirm(self, msg):
             return
+        ids = [sup_id for sup_id, _, _, _ in items]
         with Session() as session:
-            session.query(Part).filter_by(supplier_id=sup_id).update({"supplier_id": None})
-            session.query(Supplier).filter_by(id=sup_id).delete()
+            session.query(Part).filter(Part.supplier_id.in_(ids)).update({"supplier_id": None}, synchronize_session=False)
+            session.query(Supplier).filter(Supplier.id.in_(ids)).delete(synchronize_session=False)
             session.commit()
         self._refresh()
