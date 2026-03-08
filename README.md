@@ -62,6 +62,20 @@ The database is stored at `~/.mcubin/inventory.db` and migrations run automatica
 
 The label designer (Labels tab) renders to ZPL and sends output to a USB-connected Zebra printer (tested with ZP 450). The printer device path defaults to `/dev/usb/lp0` and can be changed under Settings → Label Printing.
 
+### Linux: unload the usblp kernel module
+
+Linux loads the `usblp` kernel module automatically for USB printers, which claims the device and prevents direct write access. You need to unload it:
+
+```bash
+sudo rmmod usblp
+```
+
+To make this permanent (persist across reboots), blacklist the module:
+
+```bash
+echo "blacklist usblp" | sudo tee /etc/modprobe.d/blacklist-usblp.conf
+```
+
 ## Data Location
 
 | File | Path |
