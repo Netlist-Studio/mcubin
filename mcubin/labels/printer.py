@@ -19,7 +19,13 @@ def qimage_to_zpl(image, label_name: str = "LABEL") -> str:
 
     grf = GRF.from_image(png_bytes, label_name)
     grf.optimise_barcodes()
-    return grf.to_zpl()
+    zpl = grf.to_zpl()
+    # zplgrf omits ^PW/^LL (label dimensions) and injects conflicting media
+    # commands (^MMC,Y + ^MNY) that cause blank output on gap-label printers.
+    w, h = image.width(), image.height()
+    zpl = zpl.replace("^MMC,Y", "").replace("^MNY", "")
+    zpl = zpl.replace("^FO0,0", f"^PW{w}^LL{h}^FO0,0")
+    return zpl
 
 
 def send_to_printer(zpl: str, device: str = "/dev/usb/lp0") -> None:

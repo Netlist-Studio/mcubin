@@ -171,9 +171,12 @@ def main() -> None:
     # Convert to ZPL via zplgrf
     print("Converting to ZPL...")
     with open("/tmp/label_sheet.png", "rb") as f:
-        grf = GRF.from_image(f.read(), "LABEL")
+        png_bytes = f.read()
+    grf = GRF.from_image(png_bytes, "LABEL")
     grf.optimise_barcodes()
     zpl = grf.to_zpl()
+    zpl = zpl.replace("^MMC,Y", "").replace("^MNY", "")
+    zpl = zpl.replace("^FO0,0", f"^PW{SHEET_W}^LL{SHEET_H}^FO0,0")
     with open("/tmp/label_sheet.zpl", "w") as f:
         f.write(zpl)
     print(f"Saved: /tmp/label_sheet.zpl  ({len(zpl)} bytes)")
