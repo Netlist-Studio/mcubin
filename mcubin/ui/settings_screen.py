@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox,
-    QApplication,
+    QApplication, QLineEdit,
 )
 
 import mcubin.config as config
@@ -100,7 +100,31 @@ class SettingsScreen(QWidget):
             root.addWidget(cb)
             root.addSpacing(10)
 
+        root.addSpacing(24)
+
+        # ── Label printing ─────────────────────────────────────
+        label_label = QLabel("LABEL PRINTING")
+        label_label.setObjectName("sectionLabel")
+        root.addWidget(label_label)
+        root.addSpacing(16)
+
+        printer_row = QHBoxLayout()
+        printer_row.setSpacing(12)
+        printer_lbl = QLabel("Printer device")
+        printer_lbl.setObjectName("formLabel")
+        printer_row.addWidget(printer_lbl)
+        self._printer_input = QLineEdit()
+        self._printer_input.setPlaceholderText("/dev/usb/lp0")
+        self._printer_input.setText(config.get("label_printer_device") or "/dev/usb/lp0")
+        self._printer_input.editingFinished.connect(self._on_printer_changed)
+        printer_row.addWidget(self._printer_input)
+        printer_row.addStretch()
+        root.addLayout(printer_row)
+
         root.addStretch()
+
+    def _on_printer_changed(self) -> None:
+        config.set("label_printer_device", self._printer_input.text().strip())
 
     def _on_theme_changed(self, theme: str) -> None:
         from mcubin.app import apply_theme
