@@ -4,11 +4,11 @@ A desktop inventory system for electronic parts, built around one goal: **rapidl
 
 > **Note:** This project was built with [Claude Code](https://claude.ai/code) to fit my personal needs. It is experimental, hasn't been well tested or reviewed, and is shared as-is. Use at your own risk. Tested on Linux only.
 
-![Parts screen](images/parts_screen.png)
+![Parts screen](images/mcubin_parts_screen.png)
 
-![Add Part screen](images/add_part_screen.png)
+![Add Part screen](images/mcubin_add_part_screen.png)
 
-![Label designer](images/label_screen.png)
+![Label designer](images/mcubin_label_screen.png)
 
 ## Features
 
