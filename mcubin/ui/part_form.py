@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QDialogButtonBox, QApplication,
 )
 import mcubin.config as _config
+from mcubin.ui.dialogs import fix_combo
 from mcubin.database import Session, IMAGES_DIR
 from mcubin.models import Location, Part, Supplier
 from mcubin.suppliers import get_provider_api
@@ -57,7 +58,7 @@ def download_image(part_id: int, image_url: str) -> str | None:
         ext = Path(urlparse(image_url).path).suffix
         filename = f"{part_id}{ext}"
         dest = IMAGES_DIR / filename
-        with _requests.get(image_url, headers={"User-Agent": "Wget/1.21.3"}, stream=True, timeout=(5, 30)) as resp:
+        with _requests.get(image_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0"}, stream=True, timeout=(5, 30)) as resp:
             resp.raise_for_status()
             content_type = resp.headers.get("Content-Type", "")
             if not content_type.startswith("image/"):
@@ -218,6 +219,7 @@ class PartForm(QWidget):
 
         self.supplier_combo = QComboBox()
         self.supplier_combo.setPlaceholderText("Select supplier…")
+        fix_combo(self.supplier_combo)
         self._reload_suppliers()
 
         self.mfr_edit = QLineEdit()
@@ -231,6 +233,7 @@ class PartForm(QWidget):
         self.loc_combo.setMinimumWidth(200)
         self.loc_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.loc_combo.lineEdit().setPlaceholderText("e.g. Bin A3")
+        fix_combo(self.loc_combo)
         self._reload_locations()
 
         self.cat_edit = QLineEdit()

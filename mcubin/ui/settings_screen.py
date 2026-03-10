@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
 )
 
 import mcubin.config as config
+from mcubin.ui.dialogs import fix_combo
 
 
 THEMES = [
@@ -68,6 +69,7 @@ class SettingsScreen(QWidget):
         theme_lbl.setObjectName("formLabel")
         theme_row.addWidget(theme_lbl)
         self._theme_combo = QComboBox()
+        fix_combo(self._theme_combo)
         self._theme_combo.addItems(THEMES)
         current_theme = config.get("theme") or "dark_blue.xml"
         if current_theme in THEMES:

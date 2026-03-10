@@ -1,8 +1,14 @@
+from PySide6.QtCore import QSize
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QLabel, QLineEdit, QMessageBox, QVBoxLayout,
     QComboBox,
 )
+
+
+def fix_combo(combo: QComboBox) -> None:
+    """Remove the icon column gap Qt reserves in combo dropdown views."""
+    combo.view().setIconSize(QSize(0, 0))
 
 
 def get_text(parent, title: str, label: str, text: str = "") -> str | None:
@@ -49,6 +55,7 @@ def pick_location(parent, locations: list[str]) -> str | None:
     combo.addItems(locations)
     combo.setCurrentText("")
     combo.lineEdit().setPlaceholderText("Select or type a location…")
+    fix_combo(combo)
     lay.addWidget(combo)
 
     buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)

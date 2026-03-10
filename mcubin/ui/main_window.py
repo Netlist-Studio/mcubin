@@ -2,13 +2,13 @@ from PySide6.QtCore import Qt, QItemSelectionModel
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLineEdit, QPushButton, QLabel, QStatusBar, QStackedWidget,
-    QMenu, QSplitter,
+    QMenu, QSplitter, QComboBox,
 )
 from sqlalchemy.orm import joinedload
 
 import mcubin.config as _config
 from mcubin.database import Session, IMAGES_DIR
-from mcubin.models import Location, Part
+from mcubin.models import Location, Part, Supplier
 from mcubin.ui.parts_table import PartsModel, make_parts_table, save_header_state, restore_header_state
 from mcubin.ui.add_part_screen import AddPartScreen, _resolve_location
 from mcubin.ui.part_form import download_image_async
@@ -18,7 +18,7 @@ from mcubin.ui.suppliers_screen import SuppliersScreen
 from mcubin.ui.part_detail_panel import PartDetailPanel
 from mcubin.ui.settings_screen import SettingsScreen
 from mcubin.ui.label_designer_dialog import LabelPrintScreen
-from mcubin.ui.dialogs import confirm, pick_location
+from mcubin.ui.dialogs import confirm, pick_location, fix_combo
 
 NAV = [
     ("parts",     "Parts"),
@@ -96,12 +96,6 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(24, 20, 24, 16)
         layout.setSpacing(12)
 
-        self.search_input = QLineEdit()
-        self.search_input.setObjectName("searchInput")
-        self.search_input.setPlaceholderText("Search parts…")
-        self.search_input.textChanged.connect(self._on_search)
-        layout.addWidget(self.search_input)
-
         self.model = PartsModel()
         self.table, self.proxy = make_parts_table()
         self.proxy.setSourceModel(self.model)
@@ -112,10 +106,52 @@ class MainWindow(QMainWindow):
         self.table.customContextMenuRequested.connect(self._on_context_menu)
         self.table.selectionModel().currentChanged.connect(self._on_current_changed)
 
+        self.search_input = QLineEdit()
+        self.search_input.setObjectName("searchInput")
+        self.search_input.setPlaceholderText("Search parts…")
+
+        self.search_input.textChanged.connect(self._on_search)
+
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(8)
+
+        self._filter_location = QComboBox()
+        self._filter_location.setObjectName("filterCombo")
+        fix_combo(self._filter_location)
+        self._filter_location.currentIndexChanged.connect(self._on_filter_changed)
+        self._filter_manufacturer = QComboBox()
+        self._filter_manufacturer.setObjectName("filterCombo")
+        fix_combo(self._filter_manufacturer)
+        self._filter_manufacturer.currentIndexChanged.connect(self._on_filter_changed)
+        self._filter_supplier = QComboBox()
+        self._filter_supplier.setObjectName("filterCombo")
+        fix_combo(self._filter_supplier)
+        self._filter_supplier.currentIndexChanged.connect(self._on_filter_changed)
+
+        for label_text, combo in [
+            ("Location:", self._filter_location),
+            ("Manufacturer:", self._filter_manufacturer),
+            ("Supplier:", self._filter_supplier),
+        ]:
+            lbl = QLabel(label_text)
+            lbl.setObjectName("formLabel")
+            filter_row.addWidget(lbl)
+            filter_row.addWidget(combo)
+
+        filter_row.addStretch()
+
+        table_pane = QWidget()
+        table_layout = QVBoxLayout(table_pane)
+        table_layout.setContentsMargins(0, 0, 0, 0)
+        table_layout.setSpacing(12)
+        table_layout.addWidget(self.search_input)
+        table_layout.addLayout(filter_row)
+        table_layout.addWidget(self.table)
+
         self.detail_panel = PartDetailPanel(on_edit=self._edit_part)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(self.table)
+        splitter.addWidget(table_pane)
         splitter.addWidget(self.detail_panel)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
@@ -273,7 +309,28 @@ class MainWindow(QMainWindow):
 
     # ── Data ──────────────────────────────────────────────────────────────
 
+    def _populate_filters(self, locations, manufacturers, suppliers):
+        """Refresh filter combo contents, preserving current selection where possible."""
+        for combo, items in [
+            (self._filter_location, locations),
+            (self._filter_manufacturer, manufacturers),
+            (self._filter_supplier, suppliers),
+        ]:
+            current = combo.currentText()
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem("All")
+            for item in items:
+                combo.addItem(item)
+            idx = combo.findText(current)
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+            combo.blockSignals(False)
+
     def _load_parts(self, search: str = ""):
+        loc_filter = self._filter_location.currentText() if self._filter_location.currentIndex() > 0 else None
+        mfr_filter = self._filter_manufacturer.currentText() if self._filter_manufacturer.currentIndex() > 0 else None
+        sup_filter = self._filter_supplier.currentText() if self._filter_supplier.currentIndex() > 0 else None
+
         with Session() as session:
             q = session.query(Part).options(
                 joinedload(Part.location_obj),
@@ -288,8 +345,25 @@ class MainWindow(QMainWindow):
                     Part.location_obj.has(Location.name.ilike(like)) |
                     Part.category.ilike(like)
                 )
+            if loc_filter:
+                q = q.filter(Part.location_obj.has(Location.name == loc_filter))
+            if mfr_filter:
+                q = q.filter(Part.manufacturer == mfr_filter)
+            if sup_filter:
+                q = q.filter(Part.supplier_obj.has(Supplier.name == sup_filter))
+
             parts = q.order_by(Part.updated_at.desc()).all()
+
+            locations = sorted(r for (r,) in session.query(Location.name).order_by(Location.name).all())
+            manufacturers = sorted(r for (r,) in
+                                   session.query(Part.manufacturer).filter(Part.manufacturer.isnot(None)).distinct()
+                                   .order_by(Part.manufacturer))
+            suppliers = sorted(r for (r,) in session.query(Supplier.name).order_by(Supplier.name).all())
+
             session.expunge_all()
+
+        self._populate_filters(locations, manufacturers, suppliers)
+
         self.model.refresh(parts)
         if parts:
             self.table.selectionModel().setCurrentIndex(
@@ -303,6 +377,9 @@ class MainWindow(QMainWindow):
 
     def _on_search(self, text: str):
         self._load_parts(text.strip())
+
+    def _on_filter_changed(self, _index: int):
+        self._load_parts(self.search_input.text().strip())
 
     # ── Geometry ───────────────────────────────────────────────────────────
 

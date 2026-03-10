@@ -13,7 +13,7 @@ from mcubin.database import Session
 from mcubin.models import Supplier, Part, PROVIDERS
 from mcubin.suppliers import get_provider_api
 from mcubin.suppliers.base import SettingsField
-from mcubin.ui.dialogs import confirm
+from mcubin.ui.dialogs import confirm, fix_combo
 
 _CONFIG_KEY = "suppliers_table_header"
 
@@ -96,6 +96,7 @@ class _SupplierDialog(QDialog):
         self.name_edit.setPlaceholderText("e.g. Mouser Electronics")
 
         self.provider_combo = QComboBox()
+        fix_combo(self.provider_combo)
         self.provider_combo.addItem("None", userData="")
         for key in PROVIDERS:
             self.provider_combo.addItem(PROVIDER_LABELS[key], userData=key)
