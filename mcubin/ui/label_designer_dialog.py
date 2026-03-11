@@ -47,6 +47,7 @@ DPI = 203
 DEFAULT_TILE_H = 160
 
 SHEET_PRESETS: list[tuple[str, tuple[int, int]]] = [
+    ('4" × 2"',  (812,  406)),
     ('4" × 6"',  (812, 1218)),
     ('4" × 8"',  (812, 1624)),
     ('4" × 12"', (812, 2436)),
@@ -759,7 +760,10 @@ class SheetSettingsBar(QWidget):
         _fix_combo(self._sheet_combo)
         for label, _ in SHEET_PRESETS:
             self._sheet_combo.addItem(label)
-        self._sheet_combo.setCurrentIndex(1)  # 4×8 default
+        import mcubin.config as _config
+        saved = _config.get("label_sheet")
+        idx = self._sheet_combo.findText(saved) if saved else -1
+        self._sheet_combo.setCurrentIndex(idx if idx >= 0 else 0)  # 4×2 default
         self._sheet_combo.currentIndexChanged.connect(self._on_sheet_changed)
         lay.addWidget(self._sheet_combo)
 
@@ -779,6 +783,8 @@ class SheetSettingsBar(QWidget):
         self._update_count_label()
 
     def _on_sheet_changed(self, _: int) -> None:
+        import mcubin.config as _config
+        _config.set("label_sheet", self._sheet_combo.currentText())
         self.sheet_changed.emit(self.current_sheet())
         self._update_count_label()
 
@@ -793,6 +799,11 @@ class SheetSettingsBar(QWidget):
 
     def current_tile_height(self) -> int:
         return self._tile_spin.value()
+
+    def set_sheet_by_label(self, label: str) -> None:
+        idx = self._sheet_combo.findText(label)
+        if idx >= 0:
+            self._sheet_combo.setCurrentIndex(idx)
 
 
 # ---------------------------------------------------------------------------
@@ -922,7 +933,7 @@ class LabelPrintScreen(QWidget):
         canvas_label.setObjectName("sectionLabel")
         centre_lay.addWidget(canvas_label)
 
-        sheet_w, _ = SHEET_PRESETS[1][1]  # 4×8 default
+        sheet_w, _ = SHEET_PRESETS[0][1]  # 4×2 default
         self._scene = LabelScene(tile_w=sheet_w, tile_h=DEFAULT_TILE_H)
         self._scene.item_selected.connect(self._on_item_selected)
 
@@ -1086,6 +1097,8 @@ class LabelPrintScreen(QWidget):
             data = load_template(name)
             deserialize_scene(self._scene, data["items"])
             # Restore tile height and sheet if saved
+            if "sheet" in data:
+                self._settings_bar.set_sheet_by_label(data["sheet"])
             if "tile_height" in data:
                 self._settings_bar._tile_spin.setValue(data["tile_height"])
             self._update_preview()

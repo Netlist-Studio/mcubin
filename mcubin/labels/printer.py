@@ -24,7 +24,7 @@ def qimage_to_zpl(image, label_name: str = "LABEL") -> str:
     # commands (^MMC,Y + ^MNY) that cause blank output on gap-label printers.
     w, h = image.width(), image.height()
     zpl = zpl.replace("^MMC,Y", "").replace("^MNY", "")
-    zpl = zpl.replace("^FO0,0", f"^PW{w}^LL{h}^FO0,0")
+    zpl = zpl.replace("^FO0,0", f"^MMT^PW{w}^LL{h}^FO0,0")
     return zpl
 
 
