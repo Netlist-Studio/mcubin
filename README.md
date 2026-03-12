@@ -13,6 +13,7 @@ A desktop inventory system for electronic parts, built around one goal: **rapidl
 ## Features
 
 - **Barcode scanner workflow** — scan MPN → Supplier PN → Quantity, Enter advances between fields, screen stays open for the next part
+- **Camera bag scanning** — point a webcam at a Mouser, DigiKey, or LCSC bag; 2D barcode is decoded automatically, supplier auto-selected, and form fields filled in
 - **Mouser and DigiKey lookup** — fetches description, price breaks, datasheet, image automatically
 - SQLite-backed storage with automatic Alembic migrations
 - WYSIWYG label designer with ZPL output for Zebra label printers
@@ -36,7 +37,7 @@ pip install -e .
 Or install dependencies manually:
 
 ```bash
-pip install PySide6 SQLAlchemy alembic qt-material requests Pillow python-barcode zplgrf
+pip install PySide6 SQLAlchemy alembic qt-material requests Pillow python-barcode zplgrf zxing-cpp opencv-python-headless
 ```
 
 ## Run
@@ -57,6 +58,25 @@ The database is stored at `~/.mcubin/inventory.db` and migrations run automatica
 1. Go to [developer.digikey.com](https://developer.digikey.com) and create a **production** app (not sandbox)
 2. Subscribe to both **Product Information V4** and **Barcode** APIs
 3. In mcubin: Suppliers → Add supplier → select DigiKey → enter Client ID and Client Secret
+
+## Camera Bag Scanning
+
+The **Scan Bag** button (Add Part screen) opens a live camera feed. Hold a supplier bag up to the camera — the 2D barcode is decoded automatically, the correct supplier is selected, and MPN/quantity are filled in. Supported formats:
+
+| Supplier | Format | Fields decoded |
+|----------|--------|----------------|
+| Mouser | DataMatrix | MPN, Qty |
+| DigiKey | DataMatrix | MPN, Qty |
+| LCSC | QR Code | LCSC PN, MPN (partial) |
+
+### Setup
+
+1. Install system dependencies:
+   ```bash
+   sudo apt install libzbar0
+   sudo usermod -aG video $USER   # log out and back in after
+   ```
+2. In mcubin: Settings → Camera → select your webcam
 
 ## Label Printing
 

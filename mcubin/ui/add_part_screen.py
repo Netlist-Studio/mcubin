@@ -59,6 +59,9 @@ class AddPartScreen(QWidget):
         root.addSpacing(16)
 
         btn_row = QHBoxLayout()
+        self._scan_btn = QPushButton("Scan Bag")
+        self._scan_btn.clicked.connect(self._scan_bag)
+        btn_row.addWidget(self._scan_btn)
         btn_row.addStretch()
         self._save_btn = QPushButton("Save Part")
         self._save_btn.setObjectName("primaryBtn")
@@ -70,6 +73,54 @@ class AddPartScreen(QWidget):
 
         # Event filter on qty_spin for auto-lookup
         self.form.qty_spin.installEventFilter(self)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._scan_btn.setVisible(config.get("camera_index") is not None)
+
+    def _scan_bag(self):
+        from mcubin.ui.camera_scan_dialog import CameraScanDialog
+        dlg = CameraScanDialog(self)
+        if dlg.exec() != CameraScanDialog.DialogCode.Accepted:
+            return
+        result = dlg.scan_result()
+        if not result:
+            return
+
+        self.form.clear()
+
+        if result.detected_supplier:
+            self._select_supplier_by_provider(result.detected_supplier)
+
+        if result.mpn:
+            self.form.mpn_edit.setText(result.mpn)
+        if result.supplier_pn:
+            self.form.supplier_pn_edit.setText(result.supplier_pn)
+        if result.qty is not None:
+            self.form.qty_spin.setValue(result.qty)
+
+        # Store raw barcode text for suppliers that need it for API lookup
+        # (e.g. DigiKey barcode API to resolve catalog number from DataMatrix)
+        self._pending_raw_barcode = result.raw_barcode
+
+        if config.get("scan_auto_lookup"):
+            self.form._do_lookup()
+        else:
+            self.form.mpn_edit.setFocus()
+
+    def _select_supplier_by_provider(self, provider: str):
+        """Auto-select the supplier combo if a supplier with this provider exists."""
+        from mcubin.models import Supplier
+        with Session() as session:
+            supplier = session.query(Supplier).filter_by(provider=provider).first()
+            if not supplier:
+                return
+            supplier_id = supplier.id
+        combo = self.form.supplier_combo
+        for i in range(combo.count()):
+            if combo.itemData(i) == supplier_id:
+                combo.setCurrentIndex(i)
+                return
 
     def eventFilter(self, obj, event):
         if obj is self.form.qty_spin and event.type() == QEvent.KeyPress:

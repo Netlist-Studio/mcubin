@@ -1,3 +1,6 @@
+import glob
+import os
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox,
     QApplication, QLineEdit,
@@ -5,6 +8,42 @@ from PySide6.QtWidgets import (
 
 import mcubin.config as config
 from mcubin.ui.dialogs import fix_combo
+
+
+def _detect_cameras() -> list[tuple[str, int | None]]:
+    """Return (label, index) pairs for currently available video devices."""
+    options: list[tuple[str, int | None]] = [("Disabled", None)]
+    try:
+        for dev in sorted(glob.glob("/dev/video*")):
+            name = os.path.basename(dev)
+            if name.startswith("video"):
+                try:
+                    idx = int(name[5:])
+                    options.append((f"Camera {idx}  ({dev})", idx))
+                except ValueError:
+                    pass
+    except Exception:
+        for i in range(6):
+            options.append((f"Camera {i}", i))
+    return options
+
+
+class _CameraCombo(QComboBox):
+    """Camera selector that re-scans available devices each time the popup opens."""
+
+    def showPopup(self):
+        current = self.currentData()
+        self.blockSignals(True)
+        self.clear()
+        for label, value in _detect_cameras():
+            self.addItem(label, value)
+        # Restore previous selection by value, not index
+        for i in range(self.count()):
+            if self.itemData(i) == current:
+                self.setCurrentIndex(i)
+                break
+        self.blockSignals(False)
+        super().showPopup()
 
 
 THEMES = [
@@ -104,6 +143,32 @@ class SettingsScreen(QWidget):
 
         root.addSpacing(24)
 
+        # ── Camera ─────────────────────────────────────────────
+        camera_label = QLabel("CAMERA")
+        camera_label.setObjectName("sectionLabel")
+        root.addWidget(camera_label)
+        root.addSpacing(16)
+
+        camera_row = QHBoxLayout()
+        camera_row.setSpacing(12)
+        camera_lbl = QLabel("Bag scan camera")
+        camera_lbl.setObjectName("formLabel")
+        camera_row.addWidget(camera_lbl)
+        self._camera_combo = _CameraCombo()
+        fix_combo(self._camera_combo)
+        current_cam = config.get("camera_index")
+        for label, value in _detect_cameras():
+            self._camera_combo.addItem(label, value)
+        for i in range(self._camera_combo.count()):
+            if self._camera_combo.itemData(i) == current_cam:
+                self._camera_combo.setCurrentIndex(i)
+                break
+        self._camera_combo.currentIndexChanged.connect(self._on_camera_changed)
+        camera_row.addWidget(self._camera_combo)
+        camera_row.addStretch()
+        root.addLayout(camera_row)
+        root.addSpacing(24)
+
         # ── Label printing ─────────────────────────────────────
         label_label = QLabel("LABEL PRINTING")
         label_label.setObjectName("sectionLabel")
@@ -124,6 +189,9 @@ class SettingsScreen(QWidget):
         root.addLayout(printer_row)
 
         root.addStretch()
+
+    def _on_camera_changed(self, index: int) -> None:
+        config.set("camera_index", self._camera_combo.itemData(index))
 
     def _on_printer_changed(self) -> None:
         config.set("label_printer_device", self._printer_input.text().strip())
