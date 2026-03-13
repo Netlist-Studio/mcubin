@@ -14,6 +14,17 @@ _token_cache: dict[str, tuple[str, float]] = {}
 
 class DigiKeyAPI(SupplierAPI):
 
+    # Maps ISO currency code → DigiKey locale site code.
+    # EUR has no single site; DE is used as the primary EU site.
+    _CURRENCY_TO_LOCALE: dict[str, str] = {
+        "USD": "US", "CAD": "CA", "JPY": "JP", "GBP": "UK", "EUR": "DE",
+        "AUD": "AU", "NZD": "NZ", "HKD": "HK", "SGD": "SG", "TWD": "TW",
+        "KRW": "KR", "INR": "IN", "DKK": "DK", "NOK": "NO", "SEK": "SE",
+        "ILS": "IL", "CNY": "CN", "PLN": "PL", "CHF": "CH", "CZK": "CZ",
+        "HUF": "HU", "RON": "RO", "ZAR": "ZA", "MYR": "MY", "THB": "TH",
+        "PHP": "PH",
+    }
+
     @classmethod
     def settings_fields(cls) -> list[SettingsField]:
         return [
@@ -75,14 +86,17 @@ class DigiKeyAPI(SupplierAPI):
     def _keyword_search(self, keyword: str) -> list[PartLookupResult]:
         token = self._get_token()
         url = f"{_BASE}/search/keyword"
+        locale_site = self._CURRENCY_TO_LOCALE.get(self._currency, "US")
         headers = {
             "Authorization": f"Bearer {token}",
             "X-DIGIKEY-Client-Id": self._settings.get("client_id", "").strip(),
+            "X-DIGIKEY-Locale-Site": locale_site,
+            "X-DIGIKEY-Locale-Currency": self._currency,
             "Content-Type": "application/json",
             "accept": "application/json",
         }
         payload = {"Keywords": keyword, "Limit": 10}
-        log.debug("POST %s", url)
+        log.debug("POST %s headers=%s payload=%s", url, {**headers, "Authorization": "***"}, payload)
         resp = requests.post(url, json=payload, headers=headers, timeout=10)
         log.debug("HTTP %s", resp.status_code)
         resp.raise_for_status()
@@ -136,5 +150,6 @@ class DigiKeyAPI(SupplierAPI):
             rohs_status=classifications.get("RohsStatus") or None,
             attributes=attributes,
             unit_price=unit_price,
+            currency=self._currency,
             price_breaks=price_breaks,
         )

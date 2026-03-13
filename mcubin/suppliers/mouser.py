@@ -1,4 +1,5 @@
 import logging
+import re
 import requests
 from mcubin.suppliers.base import SupplierAPI, PartLookupResult, SettingsField
 
@@ -43,13 +44,9 @@ class MouserAPI(SupplierAPI):
 
     def _post(self, path: str, payload: dict) -> dict:
         url = f"{_BASE}/{path}"
-        log.debug("POST %s payload=%s", url, payload)
-        resp = requests.post(
-            url,
-            params={"apiKey": self._settings.get("api_key", "")},
-            json=payload,
-            timeout=10,
-        )
+        params = {"apiKey": self._settings.get("api_key", ""), "CurrencyCode": self._currency}
+        log.debug("POST %s params=%s payload=%s", url, {**params, "apiKey": "***"}, payload)
+        resp = requests.post(url, params=params, json=payload, timeout=10)
         log.debug("HTTP %s response=%s", resp.status_code, resp.text[:1000])
         resp.raise_for_status()
         return resp.json()
@@ -59,7 +56,7 @@ class MouserAPI(SupplierAPI):
         for pb in p.get("PriceBreaks", []):
             try:
                 qty = int(pb["Quantity"])
-                price = float(pb["Price"].replace("$", "").replace(",", ""))
+                price = float(re.sub(r"[^\d.]", "", pb["Price"].replace(",", "")))
                 price_breaks.append({"qty": qty, "price": price})
             except (KeyError, ValueError, AttributeError):
                 continue
@@ -81,5 +78,6 @@ class MouserAPI(SupplierAPI):
             rohs_status=p.get("ROHSStatus") or None,
             attributes=attributes,
             unit_price=price_breaks[0]["price"] if price_breaks else None,
+            currency=self._currency,
             price_breaks=price_breaks,
         )

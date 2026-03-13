@@ -25,6 +25,13 @@ from mcubin.suppliers import get_provider_api
 from mcubin.suppliers.base import PartLookupResult
 
 
+_CURRENCIES = [
+    "USD", "CAD", "EUR", "GBP", "JPY", "AUD", "CNY", "HKD", "SGD",
+    "TWD", "KRW", "NZD", "INR", "DKK", "NOK", "SEK", "ILS", "PLN",
+    "CHF", "CZK", "HUF", "RON", "ZAR", "MYR", "THB", "PHP",
+]
+
+
 def _form_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setObjectName("formLabel")
@@ -239,11 +246,35 @@ class PartForm(QWidget):
         self.cat_edit = QLineEdit()
         self.cat_edit.setPlaceholderText("e.g. MCU")
 
+        self.datasheet_edit = QLineEdit()
+        self.datasheet_edit.setPlaceholderText("https://…")
+
+        self.unit_price_edit = QLineEdit()
+        self.unit_price_edit.setPlaceholderText("e.g. 0.0150")
+
+        self.currency_combo = QComboBox()
+        self.currency_combo.addItems(_CURRENCIES)
+        fix_combo(self.currency_combo)
+        default_currency = _config.get("currency") or "USD"
+        idx = self.currency_combo.findText(default_currency)
+        self.currency_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
+        self.rohs_edit = QLineEdit()
+        self.rohs_edit.setPlaceholderText("e.g. RoHS Compliant")
+
+        price_row = QHBoxLayout()
+        price_row.setSpacing(6)
+        price_row.addWidget(self.unit_price_edit)
+        price_row.addWidget(self.currency_combo)
+
         detail_form.addRow(_form_label("Supplier"), self.supplier_combo)
         detail_form.addRow(_form_label("Manufacturer"), self.mfr_edit)
         detail_form.addRow(_form_label("Description"), self.desc_edit)
         detail_form.addRow(_form_label("Location"), self.loc_combo)
         detail_form.addRow(_form_label("Category"), self.cat_edit)
+        detail_form.addRow(_form_label("Datasheet"), self.datasheet_edit)
+        detail_form.addRow(_form_label("Unit Price"), price_row)
+        detail_form.addRow(_form_label("RoHS"), self.rohs_edit)
         root.addLayout(detail_form)
 
     def _reload_suppliers(self):
@@ -299,7 +330,7 @@ class PartForm(QWidget):
             self._show_status("Enter MPN or Supplier PN.", 4000)
             return
 
-        api = api_cls(settings)
+        api = api_cls(settings, currency=self.currency_combo.currentText() or "USD")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             if supplier_pn:
@@ -343,11 +374,19 @@ class PartForm(QWidget):
         if result.category:
             self.cat_edit.setText(result.category)
 
+        if result.datasheet:
+            self.datasheet_edit.setText(result.datasheet)
+        if result.unit_price is not None:
+            self.unit_price_edit.setText(str(result.unit_price))
+        if result.currency:
+            idx = self.currency_combo.findText(result.currency)
+            if idx >= 0:
+                self.currency_combo.setCurrentIndex(idx)
+        if result.rohs_status:
+            self.rohs_edit.setText(result.rohs_status)
+
         self._lookup_extras = {
-            "datasheet":    result.datasheet,
-            "rohs_status":  result.rohs_status,
             "attributes":   result.attributes or {},
-            "unit_price":   result.unit_price,
             "price_breaks": result.price_breaks or [],
             "image_url":    result.image_url,
             "supplier_data_updated_at": datetime.now(timezone.utc),
@@ -363,11 +402,21 @@ class PartForm(QWidget):
         self.desc_edit.setText(part.description or "")
         self.loc_combo.setCurrentText(part.location or "")
         self.cat_edit.setText(part.category or "")
+        self.datasheet_edit.setText(part.datasheet or "")
+        self.unit_price_edit.setText(str(part.unit_price) if part.unit_price is not None else "")
+        currency = part.currency or _config.get("currency") or "USD"
+        idx = self.currency_combo.findText(currency)
+        self.currency_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.rohs_edit.setText(part.rohs_status or "")
 
     def clear(self):
         for w in (self.mpn_edit, self.supplier_pn_edit, self.mfr_edit,
-                  self.desc_edit, self.cat_edit):
+                  self.desc_edit, self.cat_edit, self.datasheet_edit,
+                  self.unit_price_edit, self.rohs_edit):
             w.clear()
+        default_currency = _config.get("currency") or "USD"
+        idx = self.currency_combo.findText(default_currency)
+        self.currency_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self.supplier_combo.setCurrentIndex(0)
         self.loc_combo.setCurrentText("")
         self.qty_spin.setValue(1)
@@ -376,6 +425,11 @@ class PartForm(QWidget):
         self._reload_locations()
 
     def get_data(self) -> dict:
+        price_text = self.unit_price_edit.text().strip()
+        try:
+            unit_price = float(price_text) if price_text else None
+        except ValueError:
+            unit_price = None
         data = {
             "mpn":           self.mpn_edit.text().strip() or None,
             "supplier_pn":   self.supplier_pn_edit.text().strip() or None,
@@ -385,6 +439,10 @@ class PartForm(QWidget):
             "description":   self.desc_edit.text().strip() or None,
             "location_name": self.loc_combo.currentText().strip() or None,
             "category":      self.cat_edit.text().strip() or None,
+            "datasheet":     self.datasheet_edit.text().strip() or None,
+            "unit_price":    unit_price,
+            "currency":      self.currency_combo.currentText() or None,
+            "rohs_status":   self.rohs_edit.text().strip() or None,
         }
         data.update(self._lookup_extras)
         return data

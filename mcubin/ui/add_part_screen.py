@@ -145,6 +145,7 @@ class AddPartScreen(QWidget):
         sticky_supplier_id  = self.form.supplier_combo.currentData()  if cfg.get("scan_sticky_supplier") else None
         sticky_location     = self.form.loc_combo.currentText()        if cfg.get("scan_sticky_location")  else ""
         sticky_category     = self.form.cat_edit.text()                if cfg.get("scan_sticky_category")   else ""
+        sticky_currency     = self.form.currency_combo.currentText()
 
         log.debug("_save called")
         err = self.form.validate()
@@ -182,6 +183,10 @@ class AddPartScreen(QWidget):
             self.form.loc_combo.setCurrentText(sticky_location)
         if cfg.get("scan_sticky_category") and sticky_category:
             self.form.cat_edit.setText(sticky_category)
+        if sticky_currency:
+            idx = self.form.currency_combo.findText(sticky_currency)
+            if idx >= 0:
+                self.form.currency_combo.setCurrentIndex(idx)
 
         if self._on_status:
             self._on_status(f"Saved: {saved_mpn}", 4000)

@@ -45,6 +45,7 @@ class Part(Base):
     rohs_status: Mapped[str | None] = mapped_column(String, nullable=True)
     attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     unit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String, nullable=True)
     price_breaks: Mapped[list | None] = mapped_column(JSON, nullable=True)
     supplier_data_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

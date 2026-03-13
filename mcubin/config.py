@@ -12,6 +12,7 @@ DEFAULTS: dict = {
     "camera_index":            None,
     "theme":                   "dark_blue.xml",
     "label_printer_device":    "/dev/usb/lp0",
+    "currency":                "USD",
 }
 
 

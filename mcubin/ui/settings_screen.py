@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 
 import mcubin.config as config
 from mcubin.ui.dialogs import fix_combo
+from mcubin.ui.part_form import _CURRENCIES
 
 
 def _detect_cameras() -> list[tuple[str, int | None]]:
@@ -117,6 +118,29 @@ class SettingsScreen(QWidget):
         theme_row.addWidget(self._theme_combo)
         theme_row.addStretch()
         root.addLayout(theme_row)
+        root.addSpacing(24)
+
+        # ── Pricing ────────────────────────────────────────────
+        pricing_label = QLabel("PRICING")
+        pricing_label.setObjectName("sectionLabel")
+        root.addWidget(pricing_label)
+        root.addSpacing(16)
+
+        currency_row = QHBoxLayout()
+        currency_row.setSpacing(12)
+        currency_lbl = QLabel("Currency")
+        currency_lbl.setObjectName("formLabel")
+        currency_row.addWidget(currency_lbl)
+        self._currency_combo = QComboBox()
+        fix_combo(self._currency_combo)
+        self._currency_combo.addItems(_CURRENCIES)
+        current_currency = config.get("currency") or "USD"
+        if current_currency in _CURRENCIES:
+            self._currency_combo.setCurrentIndex(_CURRENCIES.index(current_currency))
+        self._currency_combo.currentTextChanged.connect(lambda v: config.set("currency", v))
+        currency_row.addWidget(self._currency_combo)
+        currency_row.addStretch()
+        root.addLayout(currency_row)
         root.addSpacing(24)
 
         # ── Scan mode ──────────────────────────────────────────

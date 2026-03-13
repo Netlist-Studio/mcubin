@@ -15,6 +15,7 @@ class PartLookupResult:
     rohs_status: str | None = None
     attributes: dict = field(default_factory=dict)
     unit_price: float | None = None
+    currency: str = "USD"
     price_breaks: list[dict] = field(default_factory=list)
 
 
@@ -28,8 +29,9 @@ class SettingsField:
 
 
 class SupplierAPI(ABC):
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, currency: str = "USD"):
         self._settings = settings
+        self._currency = currency
 
     @classmethod
     @abstractmethod
